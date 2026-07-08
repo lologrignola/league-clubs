@@ -1,3 +1,7 @@
+import { mountClubsPanel, onSessionReady, toggleClubsPanel, handlePanelAction } from './ui/panel.js'
+import { bindPresenceObservers } from './presence.js'
+import { isConfigured } from './config.js'
+
 function injectStyles() {
   const id = 'pengu-clubs-styles'
   if (document.getElementById(id)) return
@@ -7,10 +11,6 @@ function injectStyles() {
   link.href = new URL('./styles.css', import.meta.url).href
   document.head.appendChild(link)
 }
-
-import { mountClubsPanel, onSessionReady, toggleClubsPanel, handlePanelAction } from './ui/panel.js'
-import { bindPresenceObservers } from './presence.js'
-import { isConfigured } from './config.js'
 
 let globalUiBound = false
 
