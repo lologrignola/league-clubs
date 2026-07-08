@@ -3,6 +3,7 @@ import * as chat from './chat.js'
 import { startPresenceLoop, setMembersRefreshCallback, setPresenceRefreshCallback } from '../presence.js'
 import { showToast } from './toast.js'
 import { isConfigured } from '../config.js'
+import * as notify from './notify.js'
 import { mountFormView, openForm, closeForm, submitForm, ensureFormView } from './forms.js'
 
 const PANEL_STYLE = [
@@ -35,7 +36,7 @@ const clubsCache = new Map()
 /** @type {Map<string, object>} */
 const discoverCache = new Map()
 
-const PANEL_VERSION = '7'
+const PANEL_VERSION = '8'
 
 export function mountClubsPanel() {
   dedupePanels()
@@ -105,19 +106,34 @@ function ensurePanelInDom() {
   if (!root.contains(el)) root.appendChild(el)
 }
 
+function setToggleLabel(text) {
+  const btn = document.getElementById('pengu-clubs-toggle')
+  const label = btn?.querySelector('.pc-toggle-label')
+  if (label) label.textContent = text
+}
+
 function createToggleButton() {
   let btn = document.getElementById('pengu-clubs-toggle')
   if (!btn) {
     btn = document.createElement('button')
     btn.id = 'pengu-clubs-toggle'
     btn.className = 'pc-toggle-btn'
-    btn.textContent = 'Clubs'
-    btn.title = 'Toggle Clubs panel'
     btn.type = 'button'
     btn.style.cssText = BTN_STYLE
+    btn.innerHTML = `
+      <span class="pc-toggle-label">Clubs</span>
+      <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
+    `
+    btn.title = 'Toggle Clubs panel'
     getMountRoot().appendChild(btn)
   } else {
     btn.style.cssText = BTN_STYLE
+    if (!btn.querySelector('.pc-toggle-label')) {
+      btn.innerHTML = `
+        <span class="pc-toggle-label">Clubs</span>
+        <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
+      `
+    }
   }
 
   if (window.CommandBar?.addAction) {
@@ -277,7 +293,12 @@ async function waitForSessionThenInit() {
     try {
       await api.fetchIdentity()
       if (isConfigured()) {
+        const joinedDefault = await api.ensureDefaultClubJoin().catch((err) => {
+          console.warn('[pengu-clubs] default club join failed:', err.message)
+          return false
+        })
         await refreshClubList()
+        if (joinedDefault) showToast('Joined League Clubs', 'success', 3500)
         startPresenceLoop()
       }
     } catch {
@@ -319,7 +340,7 @@ function showPanel() {
   updateConfigBanner()
 
   const btn = document.getElementById('pengu-clubs-toggle')
-  if (btn) btn.textContent = 'Clubs ▲'
+  if (btn) setToggleLabel('Clubs ▲')
 
   if (isConfigured()) {
     refreshClubList().catch((err) => showToast(err.message))
@@ -332,7 +353,7 @@ function hidePanel() {
   el.classList.add('pc-hidden')
   el.style.display = 'none'
   const btn = document.getElementById('pengu-clubs-toggle')
-  if (btn) btn.textContent = 'Clubs'
+  if (btn) setToggleLabel('Clubs')
   hideDiscover()
 }
 
@@ -411,9 +432,12 @@ async function refreshClubList() {
       const li = document.createElement('li')
       li.className = 'pc-club-item'
       li.dataset.id = club.id
-      li.innerHTML = `<span class="pc-tag">[${club.tag}]</span> ${club.name}`
+      li.innerHTML = `<span class="pc-club-item-name"><span class="pc-tag">[${club.tag}]</span> ${club.name}</span>`
       clubListEl.appendChild(li)
     }
+
+    notify.syncClubs(clubs)
+    notify.updateClubListBadges()
   } catch (err) {
     clubListEl.innerHTML = `<li class="pc-error">${err.message}</li>`
     showToast(err.message)
@@ -424,6 +448,7 @@ function selectClub(club) {
   hideDiscover()
   closeForm()
   chat.closeClub()
+  notify.clearUnread(club.id)
   syncPanelRefs()
 
   chat.bindChatElements({

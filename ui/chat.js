@@ -3,6 +3,7 @@ import { mergeMemberPresence, fetchLocalStatus, startMemberRefreshLoop, stopMemb
 import { showToast } from './toast.js'
 import { openForm } from './forms.js'
 import { copyText } from './clipboard.js'
+import * as notify from './notify.js'
 
 /** @type {string|null} */
 export let activeClubId = null
@@ -64,6 +65,8 @@ export async function openClub(club) {
   oldestMessageAt = null
   hasMoreMessages = true
 
+  notify.clearUnread(club.id)
+
   const me = await api.fetchIdentity()
   myPuuid = me.puuid
 
@@ -74,10 +77,10 @@ export async function openClub(club) {
   await reportPresenceToClubs()
   await Promise.all([loadMessages(), loadMembers()])
 
-  const sub = api.subscribeToMessages(club.id, (record) => {
-    appendMessage(record, true)
+  notify.setActiveClub(club.id, (record) => {
+    appendMessage(normalizeMessage(record), true)
   })
-  realtimeUnsub = sub.unsubscribe
+  realtimeUnsub = () => notify.setActiveClub(null, null)
 
   startMemberRefreshLoop()
 }
@@ -142,6 +145,7 @@ async function loadMessages() {
     if (list.length) oldestMessageAt = list[0].created_at
 
     for (const msg of list) appendMessage(msg, false)
+    refreshMessageGrouping()
     els.thread.scrollTop = els.thread.scrollHeight
     updateLoadMoreVisibility()
   } catch (err) {
@@ -352,49 +356,102 @@ function statusLabel(status) {
 
 export { loadMembers }
 
+function normalizeMessage(msg) {
+  if (!msg) return null
+  return {
+    id: msg.id,
+    puuid: msg.puuid ?? '',
+    game_name: msg.game_name ?? msg.gameName ?? 'Unknown',
+    game_tag: msg.game_tag ?? msg.gameTag ?? '',
+    body: msg.body ?? '',
+    created_at: msg.created_at ?? msg.createdAt ?? null,
+  }
+}
+
+function messageAuthorKey(msg) {
+  const m = normalizeMessage(msg)
+  if (!m) return ''
+  const tag = m.game_tag ? `#${m.game_tag}` : ''
+  return `${m.game_name}${tag}`.trim().toLowerCase()
+}
+
+function previousMessageRow() {
+  if (!els.thread) return null
+  const rows = els.thread.querySelectorAll('.pc-message')
+  return rows.length ? rows[rows.length - 1] : null
+}
+
+function refreshMessageGrouping() {
+  if (!els.thread) return
+
+  let prevKey = null
+  for (const row of els.thread.querySelectorAll('.pc-message')) {
+    const key = row.getAttribute('data-author-key') || ''
+    const compact = Boolean(key && key === prevKey)
+    row.classList.toggle('pc-message-compact', compact)
+
+    const meta = row.querySelector('.pc-message-meta')
+    if (meta) meta.hidden = compact
+
+    prevKey = key
+  }
+}
+
 function appendMessage(msg, scroll) {
   ensureChatElements()
-  if (!els.thread || !msg) return
-  if (els.thread.querySelector(`[data-id="${msg.id}"]`)) return
+  const normalized = normalizeMessage(msg)
+  if (!els.thread || !normalized?.id) return
+  if (els.thread.querySelector(`[data-id="${normalized.id}"]`)) return
 
   const loading = els.thread.querySelector('.pc-loading')
   if (loading) loading.remove()
 
-  const row = buildMessageRow(msg)
+  const prev = previousMessageRow()
+  const authorKey = messageAuthorKey(normalized)
+  const compact = Boolean(prev && prev.getAttribute('data-author-key') === authorKey)
+  const row = buildMessageRow(normalized, compact)
   els.thread.appendChild(row)
+  refreshMessageGrouping()
 
   if (scroll) els.thread.scrollTop = els.thread.scrollHeight
 }
 
 function prependMessage(msg) {
-  if (!els.thread || !msg) return
-  if (els.thread.querySelector(`[data-id="${msg.id}"]`)) return
-  els.thread.insertBefore(buildMessageRow(msg), els.thread.firstChild)
+  const normalized = normalizeMessage(msg)
+  if (!els.thread || !normalized?.id) return
+  if (els.thread.querySelector(`[data-id="${normalized.id}"]`)) return
+  els.thread.insertBefore(buildMessageRow(normalized, false), els.thread.firstChild)
+  refreshMessageGrouping()
 }
 
-function buildMessageRow(msg) {
+function buildMessageRow(msg, compact = false) {
   const row = document.createElement('div')
-  row.className = 'pc-message'
+  row.className = compact ? 'pc-message pc-message-compact' : 'pc-message'
   row.dataset.id = msg.id
+  row.setAttribute('data-author-key', messageAuthorKey(msg))
 
-  const meta = document.createElement('div')
-  meta.className = 'pc-message-meta'
+  if (!compact) {
+    const meta = document.createElement('div')
+    meta.className = 'pc-message-meta'
 
-  const author = document.createElement('span')
-  author.className = 'pc-message-author'
-  author.textContent = `${msg.game_name}#${msg.game_tag}`
-  author.title = `${msg.game_name}#${msg.game_tag}`
+    const author = document.createElement('span')
+    author.className = 'pc-message-author'
+    author.textContent = `${msg.game_name}#${msg.game_tag}`
+    author.title = `${msg.game_name}#${msg.game_tag}`
 
-  const time = document.createElement('span')
-  time.className = 'pc-message-time'
-  time.textContent = formatTime(msg.created_at)
+    const time = document.createElement('span')
+    time.className = 'pc-message-time'
+    time.textContent = formatTime(msg.created_at)
+
+    meta.append(author, time)
+    row.appendChild(meta)
+  }
 
   const body = document.createElement('div')
   body.className = 'pc-message-body'
   body.textContent = msg.body
+  row.appendChild(body)
 
-  meta.append(author, time)
-  row.append(meta, body)
   return row
 }
 

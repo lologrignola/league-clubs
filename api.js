@@ -163,6 +163,37 @@ export async function getClubPresence(clubId) {
   return rpc('get_club_presence', { p_club_id: clubId, p_puuid: me.puuid })
 }
 
+const DEFAULT_JOIN_KEY = 'pengu-clubs-default-joined'
+
+function defaultClubTag() {
+  return (config.defaultClubTag || 'LEAGC').toUpperCase()
+}
+
+function defaultJoinStorageKey(puuid) {
+  return `${DEFAULT_JOIN_KEY}:${puuid}`
+}
+
+/** Auto-join the global League Clubs lounge on first run (per player). */
+export async function ensureDefaultClubJoin() {
+  const code = config.defaultClubInviteCode?.trim()
+  if (!isConfigured() || !code) return false
+
+  const me = await fetchIdentity()
+  const storageKey = defaultJoinStorageKey(me.puuid)
+  if (localStorage.getItem(storageKey) === '1') return false
+
+  const clubs = await getMyClubs()
+  const tag = defaultClubTag()
+  if (clubs?.some((c) => (c.tag || '').toUpperCase() === tag)) {
+    localStorage.setItem(storageKey, '1')
+    return false
+  }
+
+  await joinClub(code)
+  localStorage.setItem(storageKey, '1')
+  return true
+}
+
 /** @returns {{ unsubscribe: () => void }} */
 export function subscribeToMessages(clubId, onMessage) {
   if (!isConfigured()) return { unsubscribe: () => {} }

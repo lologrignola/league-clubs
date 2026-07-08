@@ -15,18 +15,34 @@ You do **not** need Supabase, a database, or your own API keys. This release con
 - League of Legends client (Windows)
 - [Pengu Loader](https://pengu.lol/) installed
 
-### Steps
+### Option A — CDN loader (recommended)
+
+One small file on disk; plugin code loads from GitHub ([jsDelivr](https://www.jsdelivr.com/)) when the client starts. You get fixes without re-downloading the repo.
+
+1. Open the Pengu plugins folder (`window.openPluginsFolder()` in DevTools)
+   - Often `C:\Program Files\Pengu Loader\plugins\` or `%LOCALAPPDATA%\Pengu Loader\plugins\`
+2. Copy **`loader/league-clubs.js`** into that folder (same level as other `.js` plugins — no subfolder needed)
+   - Or run **`loader/install.bat`** (Windows) — copies the file for you
+3. Restart the client or `window.reloadClient()`
+4. Click **Clubs** (bottom-right) or `Ctrl+K` → "Open Clubs"
+
+Direct download (after repo is public):  
+`https://github.com/lologrignola/league-clubs/raw/main/loader/league-clubs.js`
+
+Updates appear after you push to GitHub and jsDelivr refreshes (usually a few minutes on `@main`). Pin a release tag in `loader/league-clubs.js` (e.g. `@v1.0.0`) if you want slower, versioned rollouts.
+
+### Option B — full folder (offline / fork)
 
 1. **Download** this repo (Code → Download ZIP, or clone).
-2. **Open the Pengu plugins folder**
-   - In the League client: `Ctrl+Shift+I` → Console → run `window.openPluginsFolder()`
-   - Or open manually: `%LOCALAPPDATA%\Pengu Loader\plugins\`
-3. **Copy the whole plugin folder** into `plugins\`
+2. **Copy the whole plugin folder** into `plugins\`
    - Folder name can be anything (e.g. `pengu-clubs` or `league-clubs`)
    - Must contain `index.js`, `config.js`, `styles.css`, etc. at the top level of that folder
-4. **Restart the client** or run `window.reloadClient()` in DevTools
-5. Click **Clubs** (bottom-right) or `Ctrl+K` → "Open Clubs"
-6. **Create** a club or **Join** with an invite code
+3. **Restart the client** or run `window.reloadClient()` in DevTools
+
+### After install
+
+- On first launch you are auto-joined to **[LEAGC] League Clubs** — the global lounge
+- **Create** a private club or **Join** others with an invite code
 
 ### First time in a club
 
@@ -131,15 +147,40 @@ Everyone using **your** `config.js` shares **your** backend. Other installs with
 ## Project layout
 
 ```
-your-plugin-folder/
-├── index.js
-├── config.js            ← default: maintainer's backend
-├── config.example.js    ← template for self-hosting
+league-clubs/                 ← repo root (also what CDN serves)
+├── index.js                  ← plugin entry (loaded remotely if using loader/)
+├── config.js                 ← default: maintainer's backend
+├── config.example.js         ← template for self-hosting
+├── loader/
+│   ├── league-clubs.js       ← copy this to Pengu plugins/ for CDN install
+│   └── install.bat           ← Windows one-click copy
+├── version.json              ← bump for tagged CDN releases
 ├── api.js
 ├── styles.css
 ├── ui/
-└── supabase/migrations/
+└── supabase/migrations/      ← self-hosters only; not needed for CDN players
 ```
+
+---
+
+## Hosting / distribution (vs Rose)
+
+**[Rose](https://github.com/Alban1911/Rose)** ships Pengu plugins **inside its installer**: files live under `Pengu Loader/plugins/ROSE-*`, and the Rose desktop app **updates from GitHub Releases** (ZIP). Plugins talk to Rose's local HTTP bridge (`127.0.0.1`) for assets — not a public CDN.
+
+**This project** is a standalone plugin, so distribution is simpler:
+
+| Approach | Who copies what | Updates |
+|----------|-----------------|---------|
+| **CDN loader** (`loader/league-clubs.js`) | Player keeps one ~15-line file in `plugins/` | Push to `main` on GitHub → jsDelivr |
+| **Full folder** | Player copies entire repo | Re-download or `git pull` |
+| **GitHub Release ZIP** | Same as full folder | Manual re-install (Rose-style) |
+
+**Maintainer checklist**
+
+1. Keep `config.js` with the shared publishable key (players on CDN install use it from the served bundle).
+2. Push to `main` for auto-updates, or tag `v1.x.x` and point `loader/league-clubs.js` at `@v1.x.x`.
+3. Do **not** commit `service_role` keys.
+4. Keep the Supabase project active (free tier pauses when idle).
 
 ---
 
