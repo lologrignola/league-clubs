@@ -38,7 +38,6 @@ const discoverCache = new Map()
 const PANEL_VERSION = '7'
 
 export function mountClubsPanel() {
-  injectStyles()
   dedupePanels()
 
   const existing = document.getElementById('pengu-clubs-panel')
@@ -104,13 +103,6 @@ function ensurePanelInDom() {
   if (!el) return
   const root = getMountRoot()
   if (!root.contains(el)) root.appendChild(el)
-}
-
-function injectStyles() {
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = '//plugins/pengu-clubs/styles.css'
-  document.head.appendChild(link)
 }
 
 function createToggleButton() {

@@ -107,7 +107,8 @@ export async function getMessages(clubId, limit = 50, before = null) {
 }
 
 export async function searchClubs(query) {
-  return rpc('search_clubs', { p_query: query.trim() })
+  const me = await fetchIdentity()
+  return rpc('search_clubs', { p_query: query.trim(), p_puuid: me.puuid })
 }
 
 export async function updateMotd(clubId, motd) {
