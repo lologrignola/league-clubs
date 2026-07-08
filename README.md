@@ -29,7 +29,7 @@ One small file on disk; plugin code loads from GitHub ([jsDelivr](https://www.js
 Direct download (after repo is public):  
 `https://github.com/lologrignola/league-clubs/raw/main/loader/league-clubs.js`
 
-Updates appear after you push to GitHub and jsDelivr refreshes (usually a few minutes on `@main`). Pin a release tag in `loader/league-clubs.js` (e.g. `@v1.0.0`) if you want slower, versioned rollouts.
+Updates: push to GitHub, bump `rev` in `version.json`, players get it on next `reloadClient()` — no need to re-send `league-clubs.js`.
 
 ### Option B — full folder (offline / fork)
 
@@ -171,14 +171,14 @@ league-clubs/                 ← repo root (also what CDN serves)
 
 | Approach | Who copies what | Updates |
 |----------|-----------------|---------|
-| **CDN loader** (`loader/league-clubs.js`) | Player keeps one ~15-line file in `plugins/` | Push to `main` on GitHub → jsDelivr |
+| **CDN loader** (`loader/league-clubs.js`) | Player keeps one file in `plugins/` forever | Push + bump `version.json` `rev` |
 | **Full folder** | Player copies entire repo | Re-download or `git pull` |
 | **GitHub Release ZIP** | Same as full folder | Manual re-install (Rose-style) |
 
 **Maintainer checklist**
 
 1. Keep `config.js` with the shared publishable key (players on CDN install use it from the served bundle).
-2. Push to `main` for auto-updates, or tag `v1.x.x` and point `loader/league-clubs.js` at `@v1.x.x`.
+2. Push to `main`, then bump **`rev`** in `version.json` (e.g. `4` → `5`) so clients bypass League's module cache.
 3. Do **not** commit `service_role` keys.
 4. Keep the Supabase project active (free tier pauses when idle).
 

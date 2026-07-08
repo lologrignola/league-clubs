@@ -1,6 +1,7 @@
 import { mountClubsPanel, onSessionReady, toggleClubsPanel, handlePanelAction } from './ui/panel.js'
 import { bindPresenceObservers } from './presence.js'
 import { isConfigured } from './config.js'
+import { markSessionLoaded } from './ui/updates.js'
 
 function injectStyles() {
   const id = 'pengu-clubs-styles'
@@ -124,5 +125,6 @@ export function load() {
   bindGlobalToggle()
   mountClubsPanel()
   window.openPenguClubs = toggleClubsPanel
+  markSessionLoaded()
   console.log('[pengu-clubs] Clubs panel loaded — click Clubs or run openPenguClubs()')
 }

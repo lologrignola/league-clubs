@@ -5,6 +5,7 @@ import { showToast } from './toast.js'
 import { isConfigured } from '../config.js'
 import * as notify from './notify.js'
 import { mountFormView, openForm, closeForm, submitForm, ensureFormView } from './forms.js'
+import { startUpdateCheck, applyUpdate } from './updates.js'
 
 const PANEL_STYLE = [
   'position:fixed',
@@ -36,7 +37,7 @@ const clubsCache = new Map()
 /** @type {Map<string, object>} */
 const discoverCache = new Map()
 
-const PANEL_VERSION = '8'
+const PANEL_VERSION = '9'
 
 export function mountClubsPanel() {
   dedupePanels()
@@ -57,6 +58,7 @@ export function mountClubsPanel() {
     else mountFormView(panelEl)
     bindPanelEvents()
     createToggleButton()
+    startUpdateCheck()
     window.openPenguClubs = toggleClubsPanel
   } catch (err) {
     console.error('[pengu-clubs] mount failed:', err)
@@ -123,6 +125,7 @@ function createToggleButton() {
     btn.innerHTML = `
       <span class="pc-toggle-label">Clubs</span>
       <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
+      <span class="pc-update-dot pc-hidden" aria-hidden="true" title="Update available"></span>
     `
     btn.title = 'Toggle Clubs panel'
     getMountRoot().appendChild(btn)
@@ -132,6 +135,7 @@ function createToggleButton() {
       btn.innerHTML = `
         <span class="pc-toggle-label">Clubs</span>
         <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
+        <span class="pc-update-dot pc-hidden" aria-hidden="true" title="Update available"></span>
       `
     }
   }
@@ -172,7 +176,13 @@ function createPanel() {
   panelEl.style.cssText = `${PANEL_STYLE};position:fixed`
   panelEl.innerHTML = `
     <header class="pc-header">
-      <h2>Clubs</h2>
+      <div class="pc-header-left">
+        <h2>Clubs</h2>
+        <button type="button" class="pc-update-btn pc-hidden" data-action="apply-update" title="New update available — reload client">
+          <span class="pc-update-dot" aria-hidden="true"></span>
+          <span class="pc-update-label">Update</span>
+        </button>
+      </div>
       <button class="pc-close" aria-label="Close">×</button>
     </header>
     <div class="pc-config-banner pc-hidden"></div>
@@ -498,6 +508,9 @@ export function handlePanelAction(action, payload) {
       break
     case 'discover':
       showDiscover()
+      break
+    case 'apply-update':
+      applyUpdate()
       break
     case 'form-cancel':
       closeForm()
