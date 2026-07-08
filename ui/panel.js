@@ -1,6 +1,6 @@
 import * as api from '../api.js'
 import * as chat from './chat.js'
-import { startPresenceLoop, setMembersRefreshCallback, setPresenceRefreshCallback } from '../presence.js'
+import { startPresenceLoop, setMembersRefreshCallback, setPresenceRefreshCallback, setClubListSyncCallback } from '../presence.js'
 import { showToast } from './toast.js'
 import { isConfigured } from '../config.js'
 import * as notify from './notify.js'
@@ -37,7 +37,7 @@ const clubsCache = new Map()
 /** @type {Map<string, object>} */
 const discoverCache = new Map()
 
-const PANEL_VERSION = '9'
+const PANEL_VERSION = '10'
 
 export function mountClubsPanel() {
   dedupePanels()
@@ -57,6 +57,7 @@ export function mountClubsPanel() {
     if (!panelEl) createPanel()
     else mountFormView(panelEl)
     bindPanelEvents()
+    wireMembershipSync()
     createToggleButton()
     startUpdateCheck()
     window.openPenguClubs = toggleClubsPanel
@@ -281,6 +282,87 @@ function bindPanelEvents() {
   })
 }
 
+function wireMembershipSync() {
+  chat.setMembershipLostCallback((clubId) => {
+    handleRemovedFromClub(clubId, 'You were removed from this club')
+    syncClubList({ silent: true })
+  })
+  setClubListSyncCallback(() => syncClubList({ silent: true }))
+}
+
+function handleRemovedFromClub(clubId, message = 'You are no longer a member of this club') {
+  if (!clubId) return
+
+  const wasInList = clubsCache.has(clubId)
+  const wasActive = chat.activeClubId === clubId
+  if (!wasInList && !wasActive) return
+
+  clubsCache.delete(clubId)
+  notify.clearUnread(clubId)
+
+  if (wasActive) {
+    chat.closeClub()
+    panelEl?.querySelector('.pc-chat')?.classList.add('pc-hidden')
+    panelEl?.querySelector('.pc-empty')?.classList.remove('pc-hidden')
+  }
+
+  showToast(message, 'info', 5000)
+}
+
+function renderClubList(clubs) {
+  if (!clubListEl) return
+  clubListEl.innerHTML = ''
+  clubsCache.clear()
+
+  if (!clubs?.length) {
+    clubListEl.innerHTML = '<li class="pc-empty-item">No clubs yet</li>'
+    notify.syncClubs([])
+    return
+  }
+
+  for (const club of clubs) {
+    clubsCache.set(club.id, club)
+    const li = document.createElement('li')
+    li.className = 'pc-club-item'
+    li.dataset.id = club.id
+    li.innerHTML = `<span class="pc-club-item-name"><span class="pc-tag">[${club.tag}]</span> ${club.name}</span>`
+    clubListEl.appendChild(li)
+  }
+
+  notify.syncClubs(clubs)
+  notify.updateClubListBadges()
+}
+
+async function syncClubList({ silent = false } = {}) {
+  if (!isConfigured()) return
+  syncPanelRefs()
+  if (!clubListEl) return
+
+  try {
+    const clubs = await api.getMyClubs()
+    const list = clubs ?? []
+    const remoteIds = new Set(list.map((c) => c.id))
+
+    for (const id of [...clubsCache.keys()]) {
+      if (!remoteIds.has(id)) {
+        handleRemovedFromClub(id, 'You were removed from this club')
+      }
+    }
+
+    if (!silent) clubListEl.innerHTML = '<li class="pc-loading">Loading clubs…</li>'
+    renderClubList(list)
+  } catch (err) {
+    if (!silent) {
+      clubListEl.innerHTML = `<li class="pc-error">${err.message}</li>`
+      showToast(err.message)
+    }
+  }
+}
+
+async function refreshClubList() {
+  await syncClubList({ silent: false })
+}
+
 function updateConfigBanner() {
   const banner = panelEl?.querySelector('.pc-config-banner')
   if (!banner) return
@@ -423,37 +505,6 @@ async function runDiscoverSearch(query) {
   }
 }
 
-async function refreshClubList() {
-  if (!clubListEl || !isConfigured()) return
-  clubListEl.innerHTML = '<li class="pc-loading">Loading clubs…</li>'
-
-  try {
-    const clubs = await api.getMyClubs()
-    clubListEl.innerHTML = ''
-    clubsCache.clear()
-
-    if (!clubs?.length) {
-      clubListEl.innerHTML = '<li class="pc-empty-item">No clubs yet</li>'
-      return
-    }
-
-    for (const club of clubs) {
-      clubsCache.set(club.id, club)
-      const li = document.createElement('li')
-      li.className = 'pc-club-item'
-      li.dataset.id = club.id
-      li.innerHTML = `<span class="pc-club-item-name"><span class="pc-tag">[${club.tag}]</span> ${club.name}</span>`
-      clubListEl.appendChild(li)
-    }
-
-    notify.syncClubs(clubs)
-    notify.updateClubListBadges()
-  } catch (err) {
-    clubListEl.innerHTML = `<li class="pc-error">${err.message}</li>`
-    showToast(err.message)
-  }
-}
-
 function selectClub(club) {
   hideDiscover()
   closeForm()
@@ -489,7 +540,7 @@ function leaveActiveClub() {
   if (id) clubsCache.delete(id)
   panelEl?.querySelector('.pc-chat')?.classList.add('pc-hidden')
   panelEl?.querySelector('.pc-empty')?.classList.remove('pc-hidden')
-  refreshClubList()
+  syncClubList({ silent: true })
   showToast('Left club', 'success')
 }
 

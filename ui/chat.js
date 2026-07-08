@@ -20,6 +20,23 @@ let cachedMembers = []
 /** @type {string|null} */
 let myPuuid = null
 
+/** @type {((clubId: string) => void)|null} */
+let onMembershipLost = null
+
+export function setMembershipLostCallback(fn) {
+  onMembershipLost = fn
+}
+
+function isMembershipError(err) {
+  return /not a member/i.test(err?.message ?? '')
+}
+
+function notifyMembershipLost(err) {
+  if (!activeClubId || !isMembershipError(err)) return false
+  onMembershipLost?.(activeClubId)
+  return true
+}
+
 const els = {
   thread: null,
   input: null,
@@ -149,6 +166,7 @@ async function loadMessages() {
     els.thread.scrollTop = els.thread.scrollHeight
     updateLoadMoreVisibility()
   } catch (err) {
+    if (notifyMembershipLost(err)) return
     els.thread.innerHTML = `<div class="pc-error">${err.message}</div>`
     showToast(err.message)
   }
@@ -180,6 +198,7 @@ async function loadOlderMessages() {
 
     updateLoadMoreVisibility()
   } catch (err) {
+    if (notifyMembershipLost(err)) return
     showToast(err.message)
   } finally {
     if (btn) {
@@ -214,6 +233,7 @@ async function loadMembers({ silent = false } = {}) {
     const merged = mergeMemberPresence(cachedMembers, presence, local.friends, local, me.puuid)
     renderMembers(merged)
   } catch (err) {
+    if (notifyMembershipLost(err)) return
     if (!silent) {
       els.members.innerHTML = `<li class="pc-error">${err.message}</li>`
       showToast(err.message)
@@ -478,6 +498,7 @@ export async function handleSend() {
     const msg = await api.sendMessage(activeClubId, body)
     appendMessage(msg, true)
   } catch (err) {
+    if (notifyMembershipLost(err)) return
     els.input.value = body
     showToast(err.message)
   } finally {

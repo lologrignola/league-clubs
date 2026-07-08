@@ -27,6 +27,13 @@ const BUSY_PHASES = new Set([
   'InProgress',
 ])
 
+/** @type {(() => void)|null} */
+let onClubListSync = null
+
+export function setClubListSyncCallback(fn) {
+  onClubListSync = fn
+}
+
 export function setMembersRefreshCallback(fn) {
   onMembersRefresh = fn
 }
@@ -208,6 +215,7 @@ export async function reportPresenceToClubs() {
       ),
     )
 
+    onClubListSync?.()
     onPresenceRefresh?.()
   } catch (err) {
     console.warn('[pengu-clubs] presence heartbeat failed:', err.message)
