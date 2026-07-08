@@ -9,4 +9,10 @@
  * Pin a release: change @main to @v1.0.0 below.
  */
 
+const CDN = 'https://cdn.jsdelivr.net/gh/lologrignola/league-clubs@main/index.js'
+
+import(CDN).catch((err) => {
+  console.error('[pengu-clubs] CDN preload failed — check repo is public and pushed:', err)
+})
+
 export { init, load } from 'https://cdn.jsdelivr.net/gh/lologrignola/league-clubs@main/index.js'

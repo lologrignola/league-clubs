@@ -1,4 +1,13 @@
-import './styles.css'
+function injectStyles() {
+  const id = 'pengu-clubs-styles'
+  if (document.getElementById(id)) return
+  const link = document.createElement('link')
+  link.id = id
+  link.rel = 'stylesheet'
+  link.href = new URL('./styles.css', import.meta.url).href
+  document.head.appendChild(link)
+}
+
 import { mountClubsPanel, onSessionReady, toggleClubsPanel, handlePanelAction } from './ui/panel.js'
 import { bindPresenceObservers } from './presence.js'
 import { isConfigured } from './config.js'
@@ -108,6 +117,7 @@ export function init({ socket }) {
 }
 
 export function load() {
+  injectStyles()
   if (!isConfigured()) {
     console.warn('[pengu-clubs] Supabase not configured. Edit plugins/pengu-clubs/config.js')
   }
