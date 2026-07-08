@@ -36,16 +36,30 @@ function getUpdateButton() {
   return document.querySelector('#pengu-clubs-panel .pc-update-btn')
 }
 
+function setToggleUpdateHint(visible, versionLabel = '') {
+  const panel = document.getElementById('pengu-clubs-panel')
+  const panelOpen = Boolean(panel && !panel.classList.contains('pc-hidden') && panel.style.display !== 'none')
+  if (panelOpen) return
+
+  const btn = document.getElementById('pengu-clubs-toggle')
+  const label = btn?.querySelector('.pc-toggle-label')
+  if (!label || btn?.querySelector('.pc-toggle-badge:not(.pc-hidden)')) return
+  label.textContent = visible ? (versionLabel || 'Update') : 'Clubs'
+}
+
 function setUpdateVisible(visible, versionLabel = '') {
   const btn = getUpdateButton()
-  if (!btn) return
-  btn.classList.toggle('pc-hidden', !visible)
-  if (versionLabel) {
-    const label = btn.querySelector('.pc-update-label')
-    if (label) label.textContent = versionLabel
+  if (btn) {
+    btn.classList.toggle('pc-hidden', !visible)
+    if (versionLabel) {
+      const label = btn.querySelector('.pc-update-label')
+      if (label) label.textContent = versionLabel
+    }
   }
-  const toggleBadge = document.querySelector('#pengu-clubs-toggle .pc-update-dot')
-  toggleBadge?.classList.toggle('pc-hidden', !visible)
+
+  const toggleDot = document.querySelector('#pengu-clubs-toggle .pc-update-dot')
+  toggleDot?.classList.toggle('pc-hidden', !visible)
+  setToggleUpdateHint(visible, versionLabel)
 }
 
 export async function checkForUpdate() {
@@ -53,12 +67,16 @@ export async function checkForUpdate() {
     const remote = await fetchRemoteVersion()
     remoteRev = remote.rev
     const loaded = getLoadedRev()
+
     if (!remote.rev || !loaded) {
+      console.debug('[pengu-clubs] update check skipped — loaded:', loaded || '(none)', 'remote:', remote.rev || '(none)')
       setUpdateVisible(false)
       return false
     }
+
     const available = parseRev(remote.rev) > parseRev(loaded)
     const label = remote.version ? `Update ${remote.version}` : 'New update'
+    console.debug('[pengu-clubs] update check — loaded:', loaded, 'remote:', remote.rev, 'available:', available)
     setUpdateVisible(available, label)
     return available
   } catch (err) {
@@ -85,4 +103,8 @@ export function startUpdateCheck() {
 export function stopUpdateCheck() {
   if (checkTimer) clearInterval(checkTimer)
   checkTimer = null
+}
+
+if (typeof window !== 'undefined') {
+  window.__penguClubsCheckUpdate = checkForUpdate
 }

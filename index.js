@@ -123,8 +123,8 @@ export function load() {
     console.warn('[pengu-clubs] Supabase not configured. Edit plugins/pengu-clubs/config.js')
   }
   bindGlobalToggle()
+  markSessionLoaded()
   mountClubsPanel()
   window.openPenguClubs = toggleClubsPanel
-  markSessionLoaded()
   console.log('[pengu-clubs] Clubs panel loaded — click Clubs or run openPenguClubs()')
 }

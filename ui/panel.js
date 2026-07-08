@@ -5,7 +5,7 @@ import { showToast } from './toast.js'
 import { isConfigured } from '../config.js'
 import * as notify from './notify.js'
 import { mountFormView, openForm, closeForm, submitForm, ensureFormView } from './forms.js'
-import { startUpdateCheck, applyUpdate } from './updates.js'
+import { startUpdateCheck, applyUpdate, checkForUpdate } from './updates.js'
 
 const PANEL_STYLE = [
   'position:fixed',
@@ -437,6 +437,8 @@ function showPanel() {
   if (isConfigured()) {
     refreshClubList().catch((err) => showToast(err.message))
   }
+
+  checkForUpdate()
 }
 
 function hidePanel() {
@@ -447,6 +449,7 @@ function hidePanel() {
   const btn = document.getElementById('pengu-clubs-toggle')
   if (btn) setToggleLabel('Clubs')
   hideDiscover()
+  checkForUpdate()
 }
 
 function showDiscover() {
