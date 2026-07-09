@@ -1,6 +1,7 @@
 import { showToast } from './toast.js'
 
 const CDN_BASE = 'https://cdn.jsdelivr.net/gh/lologrignola/league-clubs@main'
+const VERSION_URL = 'https://raw.githubusercontent.com/lologrignola/league-clubs/main/version.json'
 const CHECK_INTERVAL_MS = 60 * 1000
 
 let checkTimer = null
@@ -23,7 +24,7 @@ export function markSessionLoaded() {
 }
 
 async function fetchRemoteVersion() {
-  const res = await fetch(`${CDN_BASE}/version.json`, { cache: 'no-store' })
+  const res = await fetch(VERSION_URL, { cache: 'no-store' })
   if (!res.ok) throw new Error(`version.json ${res.status}`)
   const data = await res.json()
   return {

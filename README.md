@@ -178,7 +178,9 @@ league-clubs/                 ← repo root (also what CDN serves)
 **Maintainer checklist**
 
 1. Keep `config.js` with the shared publishable key (players on CDN install use it from the served bundle).
-2. Push to `main`, then bump **`rev`** in `version.json` (e.g. `4` → `5`) so clients bypass League's module cache.
+2. Push to `main`, then bump **`rev`** in `version.json` (e.g. `8` → `9`) so clients know to reload.
+   - **`rev`** (GitHub raw) = update notification — instant after push
+   - **Code** (jsDelivr `@commit`) = pinned to latest GitHub commit via API — not stale `@main`
 3. Do **not** commit `service_role` keys.
 4. Keep the Supabase project active (free tier pauses when idle).
 
