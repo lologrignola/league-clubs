@@ -7,13 +7,17 @@ import * as notify from './notify.js'
 import { mountFormView, openForm, closeForm, submitForm, ensureFormView } from './forms.js'
 import { startUpdateCheck, applyUpdate, checkForUpdate } from './updates.js'
 
+const PANEL_WIDTH = 760
+const PANEL_HEIGHT = 500
+const PANEL_GAP = 8
+
 const PANEL_STYLE = [
   'position:fixed',
   'bottom:82px',
   'right:20px',
   'z-index:2147483647',
-  'width:760px',
-  'height:500px',
+  `width:${PANEL_WIDTH}px`,
+  `height:${PANEL_HEIGHT}px`,
   'display:none',
   'flex-direction:column',
   'pointer-events:auto',
@@ -147,6 +151,10 @@ function clearTogglePosition(btn) {
   btn.style.height = ''
 }
 
+function clearToggleIconColor(btn) {
+  btn.querySelector('.pc-toggle-icon')?.style.removeProperty('color')
+}
+
 function syncToggleChromeFromChat() {
   const btn = document.getElementById('pengu-clubs-toggle')
   const bar = findSocialBar()
@@ -165,8 +173,9 @@ function syncToggleChromeFromChat() {
   const frameCs = getComputedStyle(frame)
   const chatCs = chatBtn ? getComputedStyle(chatBtn) : frameCs
 
-  btn.style.backgroundColor = chatCs.backgroundColor
-  btn.style.backgroundImage = 'none'
+  btn.style.backgroundColor = ''
+  btn.style.backgroundImage = ''
+  btn.style.color = ''
 
   if (frameCs.borderWidth !== '0px') {
     btn.style.border = frameCs.border
@@ -178,7 +187,10 @@ function syncToggleChromeFromChat() {
 
   btn.style.boxShadow = frameCs.boxShadow !== 'none' ? frameCs.boxShadow : chatCs.boxShadow
   btn.style.borderRadius = frameCs.borderRadius !== '0px' ? frameCs.borderRadius : chatCs.borderRadius
-  btn.style.color = '#ccbd90'
+
+  btn.querySelector('.pc-toggle-icon')?.style.removeProperty('color')
+
+  if (isPanelVisible()) queuePanelAnchor()
 }
 
 function mountToggleInSocialBar() {
@@ -204,6 +216,7 @@ function mountToggleFallback() {
 
   btn.classList.remove('pc-toggle-native', 'pc-toggle-bubble')
   btn.classList.add('pc-toggle-fallback')
+  clearToggleIconColor(btn)
   btn.style.cssText = ''
 }
 
@@ -211,36 +224,74 @@ function syncTogglePlacement() {
   if (!mountToggleInSocialBar()) mountToggleFallback()
 }
 
-function syncPanelAnchor() {
-  const el = getPanel()
-  if (!el || !isPanelVisible()) return
+function findSocialSidebar() {
+  return document.querySelector('.lol-social-sidebar, .rcp-fe-viewport-sidebar .social-plugin-home')
+}
 
+function getPanelAnchorRects() {
+  const toggle = document.getElementById('pengu-clubs-toggle')
   const bar = findSocialBar()
-  if (!bar) {
-    if (!el.classList.contains('pc-hidden')) {
-      el.style.cssText = `${PANEL_STYLE_FALLBACK};display:flex!important`
-    }
+  const sidebar = findSocialSidebar()
+
+  return {
+    toggle: toggle?.getBoundingClientRect(),
+    bar: bar?.getBoundingClientRect(),
+    sidebar: sidebar?.getBoundingClientRect(),
+  }
+}
+
+function resolvePanelAnchor(rects) {
+  const { toggle, bar, sidebar } = rects
+  const railTop = bar?.height > 0 ? bar.top : toggle?.height > 0 ? toggle.top : null
+  if (railTop == null) return null
+
+  let right = 20
+  if (sidebar?.width > 0) {
+    right = Math.max(16, window.innerWidth - sidebar.left + PANEL_GAP)
+  } else if (toggle?.width > 0) {
+    right = Math.max(16, window.innerWidth - toggle.right)
+  } else if (bar?.width > 0) {
+    right = Math.max(16, window.innerWidth - bar.right)
+  }
+
+  const bottom = Math.max(16, window.innerHeight - railTop + PANEL_GAP)
+  const maxHeight = Math.max(280, Math.min(PANEL_HEIGHT, railTop - 24))
+  const maxWidth = Math.min(PANEL_WIDTH, window.innerWidth - right - 16)
+  const width = Math.max(320, maxWidth)
+  const height = Math.max(280, Math.min(maxHeight, PANEL_HEIGHT))
+
+  return { bottom, right, width, height }
+}
+
+function applyPanelLayout(el, { visible = isPanelVisible() } = {}) {
+  if (!el) return
+
+  const anchor = resolvePanelAnchor(getPanelAnchorRects())
+  const display = visible ? 'display:flex!important' : 'display:none'
+
+  if (!anchor) {
+    el.style.cssText = `${PANEL_STYLE_FALLBACK};${display}`
     return
   }
 
-  const rect = bar.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) return
-
-  const bottom = Math.max(72, window.innerHeight - rect.top + 8)
-  const right = Math.max(16, window.innerWidth - rect.right)
-
   el.style.cssText = [
     'position:fixed',
-    `bottom:${bottom}px`,
-    `right:${right}px`,
+    `bottom:${anchor.bottom}px`,
+    `right:${anchor.right}px`,
+    `width:${anchor.width}px`,
+    `height:${anchor.height}px`,
     'z-index:2147483647',
-    'width:760px',
-    'height:500px',
-    'display:flex!important',
+    display,
     'flex-direction:column',
     'pointer-events:auto',
     'overflow:hidden',
   ].join(';')
+}
+
+function syncPanelAnchor() {
+  const el = getPanel()
+  if (!el) return
+  applyPanelLayout(el, { visible: isPanelVisible() })
 }
 
 function queuePanelAnchor() {
@@ -271,6 +322,8 @@ function bindSocialMount() {
     if (btn.parentElement !== bar || btn.nextElementSibling !== anchor) {
       syncTogglePlacement()
     }
+
+    if (isPanelVisible()) queuePanelAnchor()
   }, 4000)
 
   socialMountObserver = new MutationObserver((mutations) => {
@@ -661,8 +714,11 @@ function showPanel() {
 
   ensurePanelInDom()
   ensureFormView(panelEl)
-  panelEl.classList.remove('pc-hidden')
-  panelEl.style.cssText = `${PANEL_STYLE};display:flex!important`
+  panelEl.classList.remove('pc-hidden', 'pc-panel-open')
+  applyPanelLayout(panelEl, { visible: true })
+  requestAnimationFrame(() => {
+    panelEl?.classList.add('pc-panel-open')
+  })
   updateConfigBanner()
   setToggleOpen(true)
   queuePanelAnchor()
@@ -677,6 +733,7 @@ function showPanel() {
 function hidePanel() {
   const el = getPanel()
   if (!el) return
+  el.classList.remove('pc-panel-open')
   el.classList.add('pc-hidden')
   el.style.display = 'none'
   setToggleOpen(false)

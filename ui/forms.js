@@ -76,14 +76,7 @@ export function openForm(opts) {
   }
 
   formView.classList.remove('pc-hidden')
-  formView.style.cssText = [
-    'flex:1',
-    'padding:16px',
-    'overflow-y:auto',
-    'display:block',
-    'min-height:200px',
-    'background:#010a13',
-  ].join(';')
+  formView.style.display = ''
 
   formView.querySelector('input')?.focus()
 }
@@ -91,7 +84,6 @@ export function openForm(opts) {
 export function closeForm() {
   if (formView) {
     formView.classList.add('pc-hidden')
-    formView.style.display = 'none'
   }
   onSubmitCallback = null
 
