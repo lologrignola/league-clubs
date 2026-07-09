@@ -20,7 +20,7 @@ const PANEL_STYLE = [
   'overflow:hidden',
 ].join(';')
 
-const BTN_STYLE = [
+const BTN_STYLE_FALLBACK = [
   'position:fixed',
   'bottom:24px',
   'right:24px',
@@ -38,6 +38,75 @@ const clubsCache = new Map()
 const discoverCache = new Map()
 
 const PANEL_VERSION = '10'
+
+let socialLayoutBound = false
+
+function findChatAnchor() {
+  return document.querySelector(
+    '.alpha-version-panel .lol-social-chat-toggle-button .chat-button,' +
+    '.alpha-version-panel .chat-toggle-button .chat-button,' +
+    '.alpha-version-panel .lol-social-chat-toggle-button',
+  )
+}
+
+function syncSocialLayout() {
+  const btn = document.getElementById('pengu-clubs-toggle')
+  if (!btn) return false
+
+  const chat = findChatAnchor()
+  if (!chat) {
+    btn.classList.remove('pc-toggle-social')
+    btn.style.cssText = BTN_STYLE_FALLBACK
+    return false
+  }
+
+  const rect = chat.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return false
+
+  btn.classList.add('pc-toggle-social')
+  const gap = 6
+  const btnWidth = btn.offsetWidth || 40
+  const btnHeight = btn.offsetHeight || 40
+  const top = rect.top + (rect.height - btnHeight) / 2
+  const left = rect.left - btnWidth - gap
+
+  btn.style.cssText = [
+    'position:fixed',
+    `top:${Math.round(top)}px`,
+    `left:${Math.round(left)}px`,
+    'right:auto',
+    'bottom:auto',
+    'z-index:2147483646',
+    'pointer-events:auto',
+  ].join(';')
+
+  const panel = document.getElementById('pengu-clubs-panel')
+  const social = document.querySelector('.alpha-version-panel')
+  if (panel && social) {
+    const socialRect = social.getBoundingClientRect()
+    if (socialRect.width > 0) {
+      panel.style.right = `${Math.round(window.innerWidth - socialRect.right)}px`
+      panel.style.bottom = `${Math.round(window.innerHeight - socialRect.top + 8)}px`
+    }
+  }
+
+  return true
+}
+
+function bindSocialLayoutSync() {
+  if (socialLayoutBound) return
+  socialLayoutBound = true
+
+  const run = () => {
+    syncSocialLayout()
+    requestAnimationFrame(() => syncSocialLayout())
+  }
+
+  window.addEventListener('resize', run)
+  const observer = new MutationObserver(run)
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
+  setInterval(run, 2000)
+}
 
 export function mountClubsPanel() {
   dedupePanels()
@@ -122,7 +191,6 @@ function createToggleButton() {
     btn.id = 'pengu-clubs-toggle'
     btn.className = 'pc-toggle-btn'
     btn.type = 'button'
-    btn.style.cssText = BTN_STYLE
     btn.innerHTML = `
       <span class="pc-toggle-label">Clubs</span>
       <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
@@ -130,16 +198,16 @@ function createToggleButton() {
     `
     btn.title = 'Toggle Clubs panel'
     getMountRoot().appendChild(btn)
-  } else {
-    btn.style.cssText = BTN_STYLE
-    if (!btn.querySelector('.pc-toggle-label')) {
-      btn.innerHTML = `
-        <span class="pc-toggle-label">Clubs</span>
-        <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
-        <span class="pc-update-dot pc-hidden" aria-hidden="true" title="Update available"></span>
-      `
-    }
+  } else if (!btn.querySelector('.pc-toggle-label')) {
+    btn.innerHTML = `
+      <span class="pc-toggle-label">Clubs</span>
+      <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
+      <span class="pc-update-dot pc-hidden" aria-hidden="true" title="Update available"></span>
+    `
   }
+
+  bindSocialLayoutSync()
+  syncSocialLayout()
 
   if (window.CommandBar?.addAction) {
     window.CommandBar.addAction({
@@ -429,6 +497,7 @@ function showPanel() {
   ensureFormView(panelEl)
   panelEl.classList.remove('pc-hidden')
   panelEl.style.cssText = `${PANEL_STYLE};display:flex!important`
+  syncSocialLayout()
   updateConfigBanner()
 
   const btn = document.getElementById('pengu-clubs-toggle')

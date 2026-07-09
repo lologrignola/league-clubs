@@ -44,8 +44,6 @@
 /* ── Toggle button ───────────────────────────────────────── */
 #pengu-clubs-toggle.pc-toggle-btn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
   z-index: 2147483646;
   pointer-events: auto;
   padding: 0 18px;
@@ -65,6 +63,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+#pengu-clubs-toggle.pc-toggle-btn.pc-toggle-social {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+#pengu-clubs-toggle.pc-toggle-btn.pc-toggle-social .pc-toggle-label {
+  max-width: 34px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-has-unread {
