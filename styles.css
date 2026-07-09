@@ -47,12 +47,17 @@
   z-index: 1;
   pointer-events: auto;
   border: 1px solid var(--pc-border-gold);
-  background: linear-gradient(180deg, #1a1f26 0%, var(--pc-bg-deep) 100%);
+  background-color: #010a13;
+  background-image: none;
   color: var(--pc-gold);
   font-family: var(--pc-font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  -webkit-font-smoothing: subpixel-antialiased;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  box-shadow: none;
+  transition: border-color 0.15s, color 0.15s;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -105,7 +110,8 @@
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-active {
   border-color: var(--pc-border-gold-bright);
   color: var(--pc-gold-bright);
-  background: linear-gradient(180deg, #252b34 0%, #0d1520 100%);
+  background-color: #010a13;
+  background-image: none;
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-has-unread {
@@ -117,8 +123,8 @@
 }
 
 @keyframes pc-native-pulse {
-  0%, 100% { box-shadow: inset 0 0 0 1px rgba(61, 214, 140, 0.35); }
-  50% { box-shadow: inset 0 0 0 1px rgba(61, 214, 140, 0.75); }
+  0%, 100% { border-color: var(--pc-border-gold); }
+  50% { border-color: var(--pc-green); }
 }
 
 #pengu-clubs-toggle .pc-toggle-badge {
@@ -146,7 +152,8 @@
 #pengu-clubs-toggle.pc-toggle-btn:hover {
   border-color: var(--pc-border-gold-bright);
   color: var(--pc-gold-bright);
-  background: linear-gradient(180deg, #252b34 0%, #0d1520 100%);
+  background-color: #010a13;
+  background-image: none;
 }
 
 /* ── Panel shell ─────────────────────────────────────────── */

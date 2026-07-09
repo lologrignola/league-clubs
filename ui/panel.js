@@ -52,8 +52,8 @@ function findChatSlot() {
 function toggleButtonMarkup() {
   return `
     <span class="pc-toggle-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 3L14.8 9.2H21.5L16.1 13.1L18.2 19.5L12 15.8L5.8 19.5L7.9 13.1L2.5 9.2H9.2L12 3Z" fill="currentColor"/>
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" data-pc-icon="community">
+        <path fill="currentColor" d="M9 10.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Zm7.25-.75a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM3.75 19v-.15c0-2.9 2.35-5.25 5.25-5.25s5.25 2.35 5.25 5.25V19H3.75Zm9.75 0v-.15c0-2.07 1.35-3.82 3.22-4.43a4.9 4.9 0 0 0-.97-.1c-1.93 0-3.5 1.57-3.5 3.5V19h1.25Z"/>
       </svg>
     </span>
     <span class="pc-toggle-badge pc-hidden" aria-label="Unread messages"></span>
@@ -61,18 +61,70 @@ function toggleButtonMarkup() {
   `
 }
 
+function refreshToggleMarkup(btn) {
+  const badgeVisible = !btn.querySelector('.pc-toggle-badge')?.classList.contains('pc-hidden')
+  const dotVisible = !btn.querySelector('.pc-update-dot')?.classList.contains('pc-hidden')
+  btn.innerHTML = toggleButtonMarkup()
+  if (badgeVisible) btn.querySelector('.pc-toggle-badge')?.classList.remove('pc-hidden')
+  if (dotVisible) btn.querySelector('.pc-update-dot')?.classList.remove('pc-hidden')
+}
+
 function ensureToggleButton() {
   let btn = document.getElementById('pengu-clubs-toggle')
-  if (btn) return btn
+  if (!btn) {
+    btn = document.createElement('button')
+    btn.id = 'pengu-clubs-toggle'
+    btn.className = 'pc-toggle-btn'
+    btn.type = 'button'
+    btn.innerHTML = toggleButtonMarkup()
+    btn.title = 'Clubs'
+    btn.setAttribute('aria-label', 'Toggle Clubs panel')
+    return btn
+  }
 
-  btn = document.createElement('button')
-  btn.id = 'pengu-clubs-toggle'
-  btn.className = 'pc-toggle-btn'
-  btn.type = 'button'
-  btn.innerHTML = toggleButtonMarkup()
-  btn.title = 'Clubs'
-  btn.setAttribute('aria-label', 'Toggle Clubs panel')
+  if (btn.querySelector('.pc-toggle-icon svg')?.dataset.pcIcon !== 'community') {
+    refreshToggleMarkup(btn)
+  }
+
   return btn
+}
+
+function findChatButton() {
+  const bar = findSocialBar()
+  if (!bar) return null
+  return bar.querySelector('.lol-social-chat-toggle-button .chat-button, .chat-toggle-button .chat-button, .chat-button')
+}
+
+function syncToggleChromeFromChat() {
+  const btn = document.getElementById('pengu-clubs-toggle')
+  const chatBtn = findChatButton()
+  if (!btn || !chatBtn || !btn.classList.contains('pc-toggle-native')) return
+
+  const frame = chatBtn.closest('.lol-social-chat-toggle-button, .chat-toggle-button') ?? chatBtn
+  const frameCs = getComputedStyle(frame)
+  const chatCs = getComputedStyle(chatBtn)
+
+  const sizeRef = frameCs.width !== '0px' && frameCs.height !== '0px' ? frameCs : chatCs
+  btn.style.width = sizeRef.width
+  btn.style.height = sizeRef.height
+  btn.style.minWidth = sizeRef.width
+
+  btn.style.backgroundColor = chatCs.backgroundColor
+  btn.style.backgroundImage = 'none'
+
+  if (frameCs.borderWidth !== '0px') {
+    btn.style.border = frameCs.border
+  } else if (chatCs.borderWidth !== '0px') {
+    btn.style.border = chatCs.border
+  } else {
+    btn.style.border = ''
+  }
+
+  btn.style.boxShadow = frameCs.boxShadow !== 'none' ? frameCs.boxShadow : chatCs.boxShadow
+  btn.style.borderRadius = frameCs.borderRadius !== '0px' ? frameCs.borderRadius : chatCs.borderRadius
+
+  // Chat icon is usually a background-image; color on .chat-button is often inherited gray.
+  btn.style.color = '#c8aa6e'
 }
 
 function mountToggleInSocialBar() {
@@ -95,7 +147,7 @@ function mountToggleInSocialBar() {
 
   btn.classList.remove('pc-toggle-fallback', 'pc-toggle-bubble')
   btn.classList.add('pc-toggle-native')
-  btn.style.cssText = ''
+  syncToggleChromeFromChat()
   return true
 }
 
