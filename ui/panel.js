@@ -38,6 +38,21 @@ let socialMountPoll = null
 /** @type {MutationObserver | null} */
 let socialMountObserver = null
 let panelAnchorTimer = null
+let toggleSyncTimer = null
+
+function isOwnToggleMutationNode(node) {
+  if (node.nodeType !== 1) return true
+  const el = /** @type {Element} */ (node)
+  return el.id === 'pengu-clubs-toggle' || el.id === 'pengu-clubs-social-slot' || !!el.querySelector?.('#pengu-clubs-toggle')
+}
+
+function queueToggleSync() {
+  clearTimeout(toggleSyncTimer)
+  toggleSyncTimer = setTimeout(() => {
+    syncTogglePlacement()
+    queuePanelAnchor()
+  }, 50)
+}
 
 function findSocialBar() {
   return document.querySelector('.alpha-version-panel')
@@ -89,25 +104,66 @@ function ensureToggleButton() {
   return btn
 }
 
+function findVoiceSlot() {
+  const bar = findSocialBar()
+  if (!bar) return null
+
+  for (const selector of [
+    '.lol-social-voice-toggle-button',
+    '.voice-toggle-button',
+    '.lol-social-voice-button',
+  ]) {
+    const el = bar.querySelector(selector)
+    if (el?.parentElement === bar) return el
+  }
+
+  return null
+}
+
+function resolveToggleAnchor(bar, chatSlot) {
+  const voiceSlot = findVoiceSlot()
+  return voiceSlot ?? chatSlot
+}
+
+function findSocialButtonFrame() {
+  const bar = findSocialBar()
+  if (!bar) return null
+  return bar.querySelector('.lol-social-chat-toggle-button, .chat-toggle-button, .lol-social-voice-toggle-button, .voice-toggle-button')
+}
+
 function findChatButton() {
   const bar = findSocialBar()
   if (!bar) return null
   return bar.querySelector('.lol-social-chat-toggle-button .chat-button, .chat-toggle-button .chat-button, .chat-button')
 }
 
+function clearTogglePosition(btn) {
+  btn.style.position = ''
+  btn.style.left = ''
+  btn.style.top = ''
+  btn.style.zIndex = ''
+  btn.style.width = ''
+  btn.style.minWidth = ''
+  btn.style.height = ''
+}
+
 function syncToggleChromeFromChat() {
   const btn = document.getElementById('pengu-clubs-toggle')
+  const bar = findSocialBar()
+  const chatSlot = findChatSlot()
   const chatBtn = findChatButton()
-  if (!btn || !chatBtn || !btn.classList.contains('pc-toggle-native')) return
+  if (!btn || !bar || !chatSlot || !btn.classList.contains('pc-toggle-native')) return
 
-  const frame = chatBtn.closest('.lol-social-chat-toggle-button, .chat-toggle-button') ?? chatBtn
+  const anchor = resolveToggleAnchor(bar, chatSlot)
+  clearTogglePosition(btn)
+
+  if (btn.parentElement !== bar || btn.nextElementSibling !== anchor) {
+    bar.insertBefore(btn, anchor)
+  }
+
+  const frame = findSocialButtonFrame() ?? chatSlot
   const frameCs = getComputedStyle(frame)
-  const chatCs = getComputedStyle(chatBtn)
-
-  const sizeRef = frameCs.width !== '0px' && frameCs.height !== '0px' ? frameCs : chatCs
-  btn.style.width = sizeRef.width
-  btn.style.height = sizeRef.height
-  btn.style.minWidth = sizeRef.width
+  const chatCs = chatBtn ? getComputedStyle(chatBtn) : frameCs
 
   btn.style.backgroundColor = chatCs.backgroundColor
   btn.style.backgroundImage = 'none'
@@ -122,9 +178,7 @@ function syncToggleChromeFromChat() {
 
   btn.style.boxShadow = frameCs.boxShadow !== 'none' ? frameCs.boxShadow : chatCs.boxShadow
   btn.style.borderRadius = frameCs.borderRadius !== '0px' ? frameCs.borderRadius : chatCs.borderRadius
-
-  // Chat icon is usually a background-image; color on .chat-button is often inherited gray.
-  btn.style.color = '#c8aa6e'
+  btn.style.color = '#ccbd90'
 }
 
 function mountToggleInSocialBar() {
@@ -132,19 +186,9 @@ function mountToggleInSocialBar() {
   const chatSlot = findChatSlot()
   if (!bar || !chatSlot) return false
 
+  document.getElementById('pengu-clubs-social-slot')?.remove()
+
   const btn = ensureToggleButton()
-  let slot = document.getElementById('pengu-clubs-social-slot')
-  if (!slot) {
-    slot = document.createElement('div')
-    slot.id = 'pengu-clubs-social-slot'
-    slot.className = 'pc-clubs-social-slot'
-  }
-
-  if (btn.parentElement !== slot) slot.appendChild(btn)
-  if (slot.parentElement !== bar || slot.nextElementSibling !== chatSlot) {
-    bar.insertBefore(slot, chatSlot)
-  }
-
   btn.classList.remove('pc-toggle-fallback', 'pc-toggle-bubble')
   btn.classList.add('pc-toggle-native')
   syncToggleChromeFromChat()
@@ -209,22 +253,41 @@ function bindSocialMount() {
   socialMountBound = true
 
   syncTogglePlacement()
-  window.addEventListener('resize', queuePanelAnchor)
+  window.addEventListener('resize', () => {
+    queuePanelAnchor()
+    syncToggleChromeFromChat()
+  })
 
-  socialMountPoll = setInterval(syncTogglePlacement, 4000)
+  socialMountPoll = setInterval(() => {
+    const btn = document.getElementById('pengu-clubs-toggle')
+    const bar = findSocialBar()
+    const chatSlot = findChatSlot()
+    if (!btn || !bar || !chatSlot || !btn.classList.contains('pc-toggle-native')) {
+      syncTogglePlacement()
+      return
+    }
+
+    const anchor = resolveToggleAnchor(bar, chatSlot)
+    if (btn.parentElement !== bar || btn.nextElementSibling !== anchor) {
+      syncTogglePlacement()
+    }
+  }, 4000)
 
   socialMountObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       if (mutation.type !== 'childList') continue
+
+      const touchedExternal = [...mutation.addedNodes, ...mutation.removedNodes].some((node) => !isOwnToggleMutationNode(node))
+      if (!touchedExternal) continue
+
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== 1) continue
         const el = /** @type {Element} */ (node)
         if (
-          el.matches?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-toggle-button') ||
-          el.querySelector?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-toggle-button')
+          el.matches?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-toggle-button, .lol-social-voice-toggle-button, .voice-toggle-button') ||
+          el.querySelector?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-toggle-button, .lol-social-voice-toggle-button, .voice-toggle-button')
         ) {
-          syncTogglePlacement()
-          queuePanelAnchor()
+          queueToggleSync()
           return
         }
       }

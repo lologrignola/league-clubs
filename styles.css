@@ -15,6 +15,15 @@
   --pc-red: #e84057;
   --pc-green: #1fad64;
   --pc-orange: #c89b3c;
+  /* Social rail (matches native LoL client icons) */
+  --pc-social-bg: #13191e;
+  --pc-social-border: #a47d32;
+  --pc-social-border-bright: #c89b3c;
+  --pc-social-border-dark: #6f5429;
+  --pc-social-icon: #ccbd90;
+  --pc-social-icon-muted: #7c7660;
+  --pc-social-badge-bg: #c89b3c;
+  --pc-social-badge-text: #13191e;
   --pc-font-display: var(--font-display, 'Beaufort for LOL', serif);
   --pc-font-body: var(--font-body, 'Spiegel', 'Helvetica Neue', Arial, sans-serif);
   --pc-radius: 0;
@@ -46,10 +55,10 @@
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  border: 1px solid var(--pc-border-gold);
-  background-color: #010a13;
+  border: 1px solid var(--pc-social-border);
+  background-color: var(--pc-social-bg);
   background-image: none;
-  color: var(--pc-gold);
+  color: var(--pc-social-icon);
   font-family: var(--pc-font-display);
   font-size: 11px;
   font-weight: 700;
@@ -64,20 +73,16 @@
   flex-shrink: 0;
 }
 
-.pc-clubs-social-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-native {
   width: 38px;
-  height: 32px;
   min-width: 38px;
+  max-width: 38px;
   padding: 0;
   margin: 0;
   border-radius: 0;
+  flex-shrink: 0;
+  align-self: stretch;
+  box-sizing: border-box;
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-fallback {
@@ -108,14 +113,14 @@
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-active {
-  border-color: var(--pc-border-gold-bright);
-  color: var(--pc-gold-bright);
-  background-color: #010a13;
+  border-color: var(--pc-social-border-bright);
+  color: var(--pc-social-icon);
+  background-color: var(--pc-social-bg);
   background-image: none;
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-has-unread {
-  border-color: var(--pc-border-gold-bright);
+  border-color: var(--pc-social-border-bright);
 }
 
 #pengu-clubs-toggle.pc-toggle-btn.pc-toggle-has-update {
@@ -123,36 +128,36 @@
 }
 
 @keyframes pc-native-pulse {
-  0%, 100% { border-color: var(--pc-border-gold); }
-  50% { border-color: var(--pc-green); }
+  0%, 100% { border-color: var(--pc-social-border); }
+  50% { border-color: var(--pc-social-border-bright); }
 }
 
 #pengu-clubs-toggle .pc-toggle-badge {
   position: absolute;
   top: -5px;
-  right: -5px;
-  min-width: 14px;
-  height: 14px;
+  right: -3px;
+  min-width: 15px;
+  height: 12px;
   padding: 0 3px;
-  border-radius: 7px;
-  background: var(--pc-red);
-  color: #fff;
+  border-radius: 2px;
+  background: var(--pc-social-badge-bg);
+  color: var(--pc-social-badge-text);
   font-family: var(--pc-font-body);
   font-size: 9px;
   font-weight: 700;
-  line-height: 14px;
+  line-height: 12px;
   letter-spacing: 0;
   text-transform: none;
   text-align: center;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(232, 64, 87, 0.45);
-  border: 1px solid var(--pc-bg-deep);
+  box-shadow: none;
+  border: none;
 }
 
 #pengu-clubs-toggle.pc-toggle-btn:hover {
-  border-color: var(--pc-border-gold-bright);
-  color: var(--pc-gold-bright);
-  background-color: #010a13;
+  border-color: var(--pc-social-border-bright);
+  color: var(--pc-social-icon);
+  background-color: var(--pc-social-bg);
   background-image: none;
 }
 
