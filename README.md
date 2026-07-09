@@ -29,8 +29,6 @@ One small file on disk; plugin code loads from GitHub ([jsDelivr](https://www.js
 Direct download (after repo is public):  
 `https://github.com/lologrignola/league-clubs/raw/main/loader/league-clubs.js`
 
-Updates: push to GitHub, bump `rev` in `version.json`, players get it on next `reloadClient()` — no need to re-send `league-clubs.js`.
-
 ### Option B — full folder (offline / fork)
 
 1. **Download** this repo (Code → Download ZIP, or clone).
