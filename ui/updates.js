@@ -37,15 +37,9 @@ function getUpdateButton() {
   return document.querySelector('#pengu-clubs-panel .pc-update-btn')
 }
 
-function setToggleUpdateHint(visible, versionLabel = '') {
-  const panel = document.getElementById('pengu-clubs-panel')
-  const panelOpen = Boolean(panel && !panel.classList.contains('pc-hidden') && panel.style.display !== 'none')
-  if (panelOpen) return
-
+function setToggleUpdateHint(visible) {
   const btn = document.getElementById('pengu-clubs-toggle')
-  const label = btn?.querySelector('.pc-toggle-label')
-  if (!label || btn?.querySelector('.pc-toggle-badge:not(.pc-hidden)')) return
-  label.textContent = visible ? (versionLabel || 'Update') : 'Clubs'
+  btn?.classList.toggle('pc-toggle-has-update', visible)
 }
 
 function setUpdateVisible(visible, versionLabel = '') {
@@ -60,7 +54,7 @@ function setUpdateVisible(visible, versionLabel = '') {
 
   const toggleDot = document.querySelector('#pengu-clubs-toggle .pc-update-dot')
   toggleDot?.classList.toggle('pc-hidden', !visible)
-  setToggleUpdateHint(visible, versionLabel)
+  setToggleUpdateHint(visible)
 }
 
 export async function checkForUpdate() {

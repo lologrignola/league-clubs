@@ -39,6 +39,17 @@ Updates: push to GitHub, bump `rev` in `version.json`, players get it on next `r
    - Must contain `index.js`, `config.js`, `styles.css`, etc. at the top level of that folder
 3. **Restart the client** or run `window.reloadClient()` in DevTools
 
+### Option C — local dev folder (recommended for you)
+
+Work in `plugins\league-clubs-local\` — instant reload, no CDN wait.
+
+1. Clone/edit this repo
+2. Run **`loader/sync-local.bat`** (copies to `plugins\league-clubs-local\`)
+3. **Remove or rename** `plugins\league-clubs.js` (CDN loader) so only one plugin loads
+4. `window.reloadClient()` after each sync
+
+Edit in GitHub repo → sync-local.bat → reload. Push to GitHub when ready for players.
+
 ### After install
 
 - On first launch you are auto-joined to **[LEAGC] League Clubs** — the global lounge
