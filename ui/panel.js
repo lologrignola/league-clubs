@@ -40,6 +40,8 @@ const discoverCache = new Map()
 const PANEL_VERSION = '10'
 
 let socialLayoutBound = false
+let socialLayoutQueued = false
+let socialLayoutApplying = false
 
 function findChatAnchor() {
   return document.querySelector(
@@ -50,62 +52,90 @@ function findChatAnchor() {
 }
 
 function syncSocialLayout() {
-  const btn = document.getElementById('pengu-clubs-toggle')
-  if (!btn) return false
+  if (socialLayoutApplying) return false
+  socialLayoutApplying = true
 
-  const chat = findChatAnchor()
-  if (!chat) {
-    btn.classList.remove('pc-toggle-social')
-    btn.style.cssText = BTN_STYLE_FALLBACK
-    return false
-  }
+  try {
+    const btn = document.getElementById('pengu-clubs-toggle')
+    if (!btn) return false
 
-  const rect = chat.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) return false
-
-  btn.classList.add('pc-toggle-social')
-  const gap = 6
-  const btnWidth = btn.offsetWidth || 40
-  const btnHeight = btn.offsetHeight || 40
-  const top = rect.top + (rect.height - btnHeight) / 2
-  const left = rect.left - btnWidth - gap
-
-  btn.style.cssText = [
-    'position:fixed',
-    `top:${Math.round(top)}px`,
-    `left:${Math.round(left)}px`,
-    'right:auto',
-    'bottom:auto',
-    'z-index:2147483646',
-    'pointer-events:auto',
-  ].join(';')
-
-  const panel = document.getElementById('pengu-clubs-panel')
-  const social = document.querySelector('.alpha-version-panel')
-  if (panel && social) {
-    const socialRect = social.getBoundingClientRect()
-    if (socialRect.width > 0) {
-      panel.style.right = `${Math.round(window.innerWidth - socialRect.right)}px`
-      panel.style.bottom = `${Math.round(window.innerHeight - socialRect.top + 8)}px`
+    const chat = findChatAnchor()
+    if (!chat) {
+      btn.classList.remove('pc-toggle-social')
+      btn.style.cssText = BTN_STYLE_FALLBACK
+      return false
     }
-  }
 
-  return true
+    const rect = chat.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return false
+
+    btn.classList.add('pc-toggle-social')
+    const gap = 6
+    const btnWidth = btn.offsetWidth || 40
+    const btnHeight = btn.offsetHeight || 40
+    const top = rect.top + (rect.height - btnHeight) / 2
+    const left = rect.left - btnWidth - gap
+
+    btn.style.cssText = [
+      'position:fixed',
+      `top:${Math.round(top)}px`,
+      `left:${Math.round(left)}px`,
+      'right:auto',
+      'bottom:auto',
+      'z-index:2147483646',
+      'pointer-events:auto',
+    ].join(';')
+
+    const panel = document.getElementById('pengu-clubs-panel')
+    const social = document.querySelector('.alpha-version-panel')
+    if (panel && social && !panel.classList.contains('pc-hidden')) {
+      const socialRect = social.getBoundingClientRect()
+      if (socialRect.width > 0) {
+        panel.style.right = `${Math.round(window.innerWidth - socialRect.right)}px`
+        panel.style.bottom = `${Math.round(window.innerHeight - socialRect.top + 8)}px`
+      }
+    }
+
+    return true
+  } finally {
+    socialLayoutApplying = false
+  }
+}
+
+function queueSocialLayoutSync() {
+  if (socialLayoutQueued) return
+  socialLayoutQueued = true
+  requestAnimationFrame(() => {
+    socialLayoutQueued = false
+    syncSocialLayout()
+  })
 }
 
 function bindSocialLayoutSync() {
   if (socialLayoutBound) return
   socialLayoutBound = true
 
-  const run = () => {
-    syncSocialLayout()
-    requestAnimationFrame(() => syncSocialLayout())
-  }
+  window.addEventListener('resize', queueSocialLayoutSync)
 
-  window.addEventListener('resize', run)
-  const observer = new MutationObserver(run)
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
-  setInterval(run, 2000)
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue
+        if (
+          node.matches?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-toggle-button, .chat-button') ||
+          node.querySelector?.('.alpha-version-panel, .lol-social-chat-toggle-button, .chat-button')
+        ) {
+          queueSocialLayoutSync()
+          return
+        }
+      }
+    }
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
+
+  setInterval(() => {
+    if (findChatAnchor()) queueSocialLayoutSync()
+  }, 5000)
 }
 
 export function mountClubsPanel() {
@@ -207,7 +237,7 @@ function createToggleButton() {
   }
 
   bindSocialLayoutSync()
-  syncSocialLayout()
+  queueSocialLayoutSync()
 
   if (window.CommandBar?.addAction) {
     window.CommandBar.addAction({
@@ -497,7 +527,7 @@ function showPanel() {
   ensureFormView(panelEl)
   panelEl.classList.remove('pc-hidden')
   panelEl.style.cssText = `${PANEL_STYLE};display:flex!important`
-  syncSocialLayout()
+  queueSocialLayoutSync()
   updateConfigBanner()
 
   const btn = document.getElementById('pengu-clubs-toggle')
