@@ -340,6 +340,22 @@ function updateMemberRow(li, m) {
   syncKickButton(li, m)
 }
 
+function isOnlineStatus(status) {
+  return (status || 'offline') !== 'offline'
+}
+
+function sortMembers(members) {
+  return [...members].sort((a, b) => {
+    const aOnline = isOnlineStatus(a.status) ? 0 : 1
+    const bOnline = isOnlineStatus(b.status) ? 0 : 1
+    if (aOnline !== bOnline) return aOnline - bOnline
+
+    const nameCmp = (a.game_name || '').localeCompare(b.game_name || '', undefined, { sensitivity: 'base' })
+    if (nameCmp !== 0) return nameCmp
+    return (a.game_tag || '').localeCompare(b.game_tag || '', undefined, { sensitivity: 'base' })
+  })
+}
+
 function renderMembers(merged) {
   if (!els.members) return
 
@@ -355,7 +371,7 @@ function renderMembers(merged) {
     if (li.dataset.puuid) existing.set(li.dataset.puuid, li)
   }
 
-  for (const m of merged) {
+  for (const m of sortMembers(merged)) {
     const row = existing.get(m.puuid)
     if (row) {
       updateMemberRow(row, m)
