@@ -515,6 +515,52 @@
   letter-spacing: 0.05em;
 }
 
+/* Club tag after nickname (panel members + native social) */
+.pc-club-tag,
+.pc-native-club-tag {
+  color: var(--pc-gold);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-left: 0.35em;
+  white-space: nowrap;
+}
+
+.pc-native-club-tag {
+  display: inline;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  pointer-events: none;
+}
+
+.pc-club-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pc-btn-main.pc-main-active {
+  border-color: var(--pc-social-border-bright);
+  color: var(--pc-gold-bright);
+}
+
+.pc-club-item.pc-club-is-main .pc-club-item-name {
+  color: var(--pc-gold-bright);
+}
+
+.pc-main-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 5px;
+  border: 1px solid var(--pc-social-border);
+  color: var(--pc-gold);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 14px;
+}
+
 /* ── Empty / loading states ──────────────────────────────── */
 .pc-empty {
   flex: 1;

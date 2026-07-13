@@ -2,6 +2,7 @@ import { mountClubsPanel, onSessionReady, toggleClubsPanel, handlePanelAction } 
 import { bindPresenceObservers } from './presence.js'
 import { isConfigured } from './config.js'
 import { markSessionLoaded } from './ui/updates.js'
+import { startClubTags } from './ui/tags.js'
 
 function injectStyles() {
   const id = 'pengu-clubs-styles'
@@ -98,10 +99,12 @@ export function init({ socket }) {
   if (!socket?.observe) {
     console.warn('[pengu-clubs] LCU socket unavailable — session gate disabled')
     onSessionReady()
+    startClubTags()
     return
   }
 
   bindPresenceObservers(socket)
+  startClubTags({ socket })
 
   socket.observe('/lol-chat/v1/session', (event) => {
     if (event.eventType === 'Delete') return

@@ -4,6 +4,7 @@ import { showToast } from './toast.js'
 import { openForm } from './forms.js'
 import { copyText } from './clipboard.js'
 import * as notify from './notify.js'
+import { getCachedTag, setCachedTags } from './tags.js'
 
 /** @type {string|null} */
 export let activeClubId = null
@@ -230,6 +231,7 @@ async function loadMembers({ silent = false } = {}) {
     ])
 
     cachedMembers = members ?? []
+    await hydrateMemberTags(cachedMembers)
     const merged = mergeMemberPresence(cachedMembers, presence, local.friends, local, me.puuid)
     renderMembers(merged)
   } catch (err) {
@@ -238,6 +240,22 @@ async function loadMembers({ silent = false } = {}) {
       els.members.innerHTML = `<li class="pc-error">${err.message}</li>`
       showToast(err.message)
     }
+  }
+}
+
+async function hydrateMemberTags(members) {
+  const puuids = [...new Set((members ?? []).map((m) => m.puuid).filter(Boolean))]
+  if (!puuids.length) return
+  try {
+    const rows = await api.getMainClubTags(puuids)
+    const entries = (rows ?? []).map((r) => [r.puuid, r.tag])
+    // Clear tags for members not in response
+    for (const puuid of puuids) {
+      if (!(rows ?? []).some((r) => r.puuid === puuid)) entries.push([puuid, ''])
+    }
+    setCachedTags(entries)
+  } catch {
+    // tags are optional enrichment
   }
 }
 
@@ -280,7 +298,8 @@ function createMemberRow(m) {
 
   const name = document.createElement('span')
   name.className = 'pc-member-name'
-  name.textContent = `${m.game_name}#${m.game_tag}`
+  name.append(document.createTextNode(`${m.game_name}#${m.game_tag}`))
+  appendMemberClubTag(name, m.puuid)
   top.append(name)
 
   if (canKickMember(m)) top.append(createKickButton(m))
@@ -291,6 +310,23 @@ function createMemberRow(m) {
 
   li.append(dot, top, status)
   return li
+}
+
+function appendMemberClubTag(nameEl, puuid) {
+  const existing = nameEl.querySelector('.pc-club-tag')
+  const tag = getCachedTag(puuid)
+  if (!tag) {
+    existing?.remove()
+    return
+  }
+  let span = existing
+  if (!span) {
+    span = document.createElement('span')
+    span.className = 'pc-club-tag'
+    nameEl.appendChild(document.createTextNode(' '))
+    nameEl.appendChild(span)
+  }
+  if (span.textContent !== tag) span.textContent = tag
 }
 
 function createKickButton(m) {
@@ -332,7 +368,11 @@ function updateMemberRow(li, m) {
   if (dot) dot.title = label
 
   const name = li.querySelector('.pc-member-name')
-  if (name) name.textContent = `${m.game_name}#${m.game_tag}`
+  if (name) {
+    while (name.firstChild) name.removeChild(name.firstChild)
+    name.append(document.createTextNode(`${m.game_name}#${m.game_tag}`))
+    appendMemberClubTag(name, m.puuid)
+  }
 
   const statusEl = li.querySelector('.pc-member-status')
   if (statusEl && statusEl.textContent !== label) statusEl.textContent = label

@@ -148,6 +148,30 @@ export async function kickMember(clubId, targetPuuid) {
   })
 }
 
+export async function setMainClub(clubId) {
+  const me = await fetchIdentity()
+  return rpc('set_main_club', {
+    p_puuid: me.puuid,
+    p_club_id: clubId,
+  })
+}
+
+export async function clearMainClub() {
+  const me = await fetchIdentity()
+  return rpc('clear_main_club', { p_puuid: me.puuid })
+}
+
+export async function getMyMainClub() {
+  const me = await fetchIdentity()
+  return rpc('get_my_main_club', { p_puuid: me.puuid })
+}
+
+/** @param {string[]} puuids */
+export async function getMainClubTags(puuids) {
+  if (!puuids?.length) return []
+  return rpc('get_main_club_tags', { p_puuids: puuids })
+}
+
 export async function upsertPresence(clubId, status, detail = '') {
   const me = await fetchIdentity()
   return rpc('upsert_presence', {

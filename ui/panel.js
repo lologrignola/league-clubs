@@ -6,6 +6,7 @@ import { isConfigured } from '../config.js'
 import * as notify from './notify.js'
 import { mountFormView, openForm, closeForm, submitForm, ensureFormView } from './forms.js'
 import { startUpdateCheck, applyUpdate, checkForUpdate } from './updates.js'
+import { refreshTagCache, setOwnMainTag } from './tags.js'
 
 const PANEL_WIDTH = 760
 const PANEL_HEIGHT = 500
@@ -35,7 +36,7 @@ const clubsCache = new Map()
 /** @type {Map<string, object>} */
 const discoverCache = new Map()
 
-const PANEL_VERSION = '12'
+const PANEL_VERSION = '13'
 
 let socialMountBound = false
 let socialMountPoll = null
@@ -502,7 +503,10 @@ function createPanel() {
           <div class="pc-chat-header">
             <div class="pc-club-title-row">
               <div class="pc-club-title"></div>
-              <button type="button" class="pc-btn-small pc-btn-danger pc-hidden" data-action="leave-club">Leave</button>
+              <div class="pc-club-title-actions">
+                <button type="button" class="pc-btn-small pc-btn-main" data-action="toggle-main-club">Set as main</button>
+                <button type="button" class="pc-btn-small pc-btn-danger pc-hidden" data-action="leave-club">Leave</button>
+              </div>
             </div>
             <div class="pc-motd-row">
               <div class="pc-motd"></div>
@@ -582,6 +586,7 @@ function handleRemovedFromClub(clubId, message = 'You are no longer a member of 
 
   const wasInList = clubsCache.has(clubId)
   const wasActive = chat.activeClubId === clubId
+  const wasMain = clubsCache.get(clubId)?.is_main
   if (!wasInList && !wasActive) return
 
   clubsCache.delete(clubId)
@@ -593,6 +598,8 @@ function handleRemovedFromClub(clubId, message = 'You are no longer a member of 
     panelEl?.querySelector('.pc-empty')?.classList.remove('pc-hidden')
   }
 
+  if (wasMain) setOwnMainTag('')
+  refreshTagCache()
   showToast(message, 'info', 5000)
 }
 
@@ -611,8 +618,9 @@ function renderClubList(clubs) {
     clubsCache.set(club.id, club)
     const li = document.createElement('li')
     li.className = 'pc-club-item'
+    if (club.is_main) li.classList.add('pc-club-is-main')
     li.dataset.id = club.id
-    li.innerHTML = `<span class="pc-club-item-name"><span class="pc-tag">[${club.tag}]</span> ${club.name}</span>`
+    li.innerHTML = `<span class="pc-club-item-name"><span class="pc-tag">[${club.tag}]</span> ${club.name}</span>${club.is_main ? '<span class="pc-main-badge" title="Main club">MAIN</span>' : ''}`
     clubListEl.appendChild(li)
   }
 
@@ -638,6 +646,13 @@ async function syncClubList({ silent = false } = {}) {
 
     if (!silent) clubListEl.innerHTML = '<li class="pc-loading">Loading clubs…</li>'
     renderClubList(list)
+    if (chat.activeClub) {
+      const fresh = clubsCache.get(chat.activeClub.id)
+      if (fresh) {
+        chat.activeClub.is_main = Boolean(fresh.is_main)
+        updateMainClubButton(chat.activeClub)
+      }
+    }
   } catch (err) {
     if (!silent) {
       clubListEl.innerHTML = `<li class="pc-error">${err.message}</li>`
@@ -679,6 +694,7 @@ async function waitForSessionThenInit() {
         await refreshClubList()
         if (joinedDefault) showToast('Joined League Clubs', 'success', 3500)
         startPresenceLoop()
+        refreshTagCache()
       }
     } catch {
       setTimeout(poll, 2000)
@@ -822,17 +838,61 @@ function selectClub(club) {
   clubListEl.querySelectorAll('.pc-club-item').forEach((el) => {
     el.classList.toggle('pc-active', el.dataset.id === club.id)
   })
+  updateMainClubButton(club)
 
   chat.openClub(club)
 }
 
+function updateMainClubButton(club) {
+  const btn = panelEl?.querySelector('[data-action="toggle-main-club"]')
+  if (!btn || !club) return
+  const isMain = Boolean(club.is_main)
+  btn.textContent = isMain ? 'Clear main' : 'Set as main'
+  btn.classList.toggle('pc-main-active', isMain)
+  btn.title = isMain
+    ? 'Remove club tag from your nickname'
+    : 'Show this club tag after your nickname'
+}
+
+async function toggleMainClub() {
+  const club = chat.activeClub
+  if (!club?.id) return
+
+  try {
+    if (club.is_main) {
+      await api.clearMainClub()
+      for (const c of clubsCache.values()) c.is_main = false
+      club.is_main = false
+      setOwnMainTag('')
+      showToast('Main club cleared', 'success')
+    } else {
+      const result = await api.setMainClub(club.id)
+      for (const c of clubsCache.values()) c.is_main = c.id === club.id
+      club.is_main = true
+      setOwnMainTag(result?.tag || club.tag)
+      showToast(`Main club set to ${club.tag}`, 'success')
+    }
+    updateMainClubButton(club)
+    renderClubList([...clubsCache.values()])
+    clubListEl?.querySelectorAll('.pc-club-item').forEach((el) => {
+      el.classList.toggle('pc-active', el.dataset.id === club.id)
+    })
+    refreshTagCache()
+  } catch (err) {
+    showToast(err.message)
+  }
+}
+
 function leaveActiveClub() {
   const id = chat.activeClubId
+  const left = id ? clubsCache.get(id) : null
   chat.closeClub()
   if (id) clubsCache.delete(id)
   panelEl?.querySelector('.pc-chat')?.classList.add('pc-hidden')
   panelEl?.querySelector('.pc-empty')?.classList.remove('pc-hidden')
+  if (left?.is_main) setOwnMainTag('')
   syncClubList({ silent: true })
+  refreshTagCache()
   showToast('Left club', 'success')
 }
 
@@ -900,6 +960,9 @@ export function handlePanelAction(action, payload) {
       break
     case 'leave-club':
       chat.handleLeaveClub(() => leaveActiveClub())
+      break
+    case 'toggle-main-club':
+      toggleMainClub()
       break
     case 'kick-member':
       if (payload) chat.handleKickMember(payload)

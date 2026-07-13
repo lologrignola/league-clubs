@@ -103,6 +103,8 @@ Want your own database, private clubs, or no shared pool? Self-host:
    - `004_presence_timeout.sql`
    - `005_leave_kick.sql`
    - `006_public_hardening.sql`
+   - `007_default_club.sql`
+   - `008_main_club.sql`
 3. Copy `config.example.js` → `config.js` (overwrite the default)
 4. In Supabase: **Project Settings → API** → copy:
    - **Project URL** → `supabaseUrl`
