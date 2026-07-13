@@ -1,7 +1,10 @@
 import * as api from './api.js'
 
-const HEARTBEAT_MS = 10_000
-const MEMBER_REFRESH_MS = 10_000
+/** Presence stale after 3 min server-side — keep under that with margin */
+const HEARTBEAT_MS = 45_000
+const MEMBER_REFRESH_MS = 30_000
+const CLUBS_CACHE_TTL_MS = 120_000
+const CLUB_LIST_SYNC_EVERY_N = 4 // every N heartbeats ≈ 3 min
 
 let heartbeatTimer = null
 let memberRefreshTimer = null
@@ -30,6 +33,14 @@ const BUSY_PHASES = new Set([
 /** @type {(() => void)|null} */
 let onClubListSync = null
 
+/** @type {string[]} */
+let cachedClubIds = []
+let clubsCacheAt = 0
+let heartbeatCount = 0
+let lastReportedStatus = ''
+let lastReportedDetail = ''
+let reportInFlight = false
+
 export function setClubListSyncCallback(fn) {
   onClubListSync = fn
 }
@@ -42,11 +53,28 @@ export function setPresenceRefreshCallback(fn) {
   onPresenceRefresh = fn
 }
 
-export async function fetchLocalStatus() {
-  const [phaseRes, meRes, friendsRes] = await Promise.all([
+/** Drop cached club ids (call after join/leave/create). */
+export function invalidateClubsCache() {
+  cachedClubIds = []
+  clubsCacheAt = 0
+}
+
+async function getClubIdsForPresence() {
+  const now = Date.now()
+  if (cachedClubIds.length && now - clubsCacheAt < CLUBS_CACHE_TTL_MS) {
+    return cachedClubIds
+  }
+  const clubs = await api.getMyClubs()
+  cachedClubIds = (clubs ?? []).map((c) => c.id).filter(Boolean)
+  clubsCacheAt = now
+  return cachedClubIds
+}
+
+/** Own status only — no friends fetch (cheap path for heartbeats). */
+export async function fetchOwnStatus() {
+  const [phaseRes, meRes] = await Promise.all([
     fetch('/lol-gameflow/v1/gameflow-phase').then((r) => r.text()).catch(() => '"None"'),
     fetch('/lol-chat/v1/me').then((r) => r.json()).catch(() => null),
-    fetch('/lol-chat/v1/friends').then((r) => r.json()).catch(() => []),
   ])
 
   let phase = 'None'
@@ -59,7 +87,16 @@ export async function fetchLocalStatus() {
   const availability = meRes?.availability ?? 'chat'
   const { status, detail } = phaseToStatus(phase, availability)
 
-  return { status, detail, phase, friends: friendsRes ?? [] }
+  return { status, detail, phase }
+}
+
+export async function fetchLocalStatus() {
+  const [own, friendsRes] = await Promise.all([
+    fetchOwnStatus(),
+    fetch('/lol-chat/v1/friends').then((r) => r.json()).catch(() => []),
+  ])
+
+  return { ...own, friends: friendsRes ?? [] }
 }
 
 function phaseToStatus(phase, availability) {
@@ -138,7 +175,6 @@ export function mergeMemberPresence(members, presenceRows, friends, localStatus,
     const pres = presenceMap.get(m.puuid)
     const friend = findFriend(friends, m)
 
-    // Plugin heartbeat first — club members with plugin, no friend required
     if (pres && pres.status !== 'offline') {
       return {
         ...m,
@@ -202,28 +238,42 @@ export function bindPresenceObservers(socket) {
 
 export async function reportPresenceToClubs() {
   if (!api.isSessionReady() || !api.isConfigured()) return
+  if (reportInFlight) return
+  reportInFlight = true
 
   try {
-    const [{ status, detail }, clubs] = await Promise.all([
-      fetchLocalStatus(),
-      api.getMyClubs(),
-    ])
+    const { status, detail } = await fetchOwnStatus()
+    const clubIds = await getClubIdsForPresence()
 
-    await Promise.all(
-      (clubs ?? []).map((club) =>
-        api.upsertPresence(club.id, status, detail),
-      ),
-    )
+    const statusChanged = status !== lastReportedStatus || detail !== lastReportedDetail
+    lastReportedStatus = status
+    lastReportedDetail = detail
 
-    onClubListSync?.()
-    onPresenceRefresh?.()
+    if (clubIds.length) {
+      await Promise.all(
+        clubIds.map((id) => api.upsertPresence(id, status, detail)),
+      )
+    }
+
+    heartbeatCount += 1
+    // Rare club-list sync (detect kicks) — not every heartbeat
+    if (heartbeatCount === 1 || heartbeatCount % CLUB_LIST_SYNC_EVERY_N === 0) {
+      clubsCacheAt = 0 // force refresh next getClubIds
+      onClubListSync?.()
+    }
+
+    // Only poke open club member UI when status actually changed
+    if (statusChanged) onPresenceRefresh?.()
   } catch (err) {
     console.warn('[pengu-clubs] presence heartbeat failed:', err.message)
+  } finally {
+    reportInFlight = false
   }
 }
 
 export function startPresenceLoop() {
   stopPresenceLoop()
+  heartbeatCount = 0
   reportPresenceToClubs()
   heartbeatTimer = setInterval(reportPresenceToClubs, HEARTBEAT_MS)
 }

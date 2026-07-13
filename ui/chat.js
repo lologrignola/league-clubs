@@ -231,7 +231,7 @@ async function loadMembers({ silent = false } = {}) {
     ])
 
     cachedMembers = members ?? []
-    await hydrateMemberTags(cachedMembers)
+    if (!silent) await hydrateMemberTags(cachedMembers)
     const merged = mergeMemberPresence(cachedMembers, presence, local.friends, local, me.puuid)
     renderMembers(merged)
   } catch (err) {

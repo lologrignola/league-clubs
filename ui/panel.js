@@ -1,6 +1,6 @@
 import * as api from '../api.js'
 import * as chat from './chat.js'
-import { startPresenceLoop, setMembersRefreshCallback, setPresenceRefreshCallback, setClubListSyncCallback } from '../presence.js'
+import { startPresenceLoop, setMembersRefreshCallback, setPresenceRefreshCallback, setClubListSyncCallback, invalidateClubsCache } from '../presence.js'
 import { showToast } from './toast.js'
 import { isConfigured } from '../config.js'
 import * as notify from './notify.js'
@@ -325,7 +325,7 @@ function bindSocialMount() {
     }
 
     if (isPanelVisible()) queuePanelAnchor()
-  }, 4000)
+  }, 8000)
 
   socialMountObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
@@ -347,7 +347,11 @@ function bindSocialMount() {
       }
     }
   })
-  socialMountObserver.observe(document.body, { childList: true, subtree: true })
+  // Prefer social bar only; fall back to body once if bar missing
+  const mountRoot = findSocialBar()?.parentElement || findSocialBar() || document.body
+  if (mountRoot) {
+    socialMountObserver.observe(mountRoot, { childList: true, subtree: true })
+  }
 }
 
 export function mountClubsPanel() {
@@ -565,7 +569,7 @@ function bindPanelEvents() {
   })
 
   setMembersRefreshCallback(() => {
-    if (chat.activeClubId) chat.loadMembers({ silent: true })
+    if (chat.activeClubId) chat.refreshMemberPresence()
   })
 
   setPresenceRefreshCallback(() => {
@@ -662,6 +666,7 @@ async function syncClubList({ silent = false } = {}) {
 }
 
 async function refreshClubList() {
+  invalidateClubsCache()
   await syncClubList({ silent: false })
 }
 
@@ -891,6 +896,7 @@ function leaveActiveClub() {
   panelEl?.querySelector('.pc-chat')?.classList.add('pc-hidden')
   panelEl?.querySelector('.pc-empty')?.classList.remove('pc-hidden')
   if (left?.is_main) setOwnMainTag('')
+  invalidateClubsCache()
   syncClubList({ silent: true })
   refreshTagCache()
   showToast('Left club', 'success')

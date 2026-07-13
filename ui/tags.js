@@ -3,7 +3,14 @@ import { isConfigured } from '../config.js'
 
 const TAG_ATTR = 'data-pc-club-tag'
 const TAG_CLASS = 'pc-native-club-tag'
-const POLL_MS = 45_000
+/** How often to re-fetch tags from Supabase */
+const POLL_MS = 120_000
+/** Debounce DOM inject after mutations */
+const INJECT_DEBOUNCE_MS = 350
+/** Debounce LCU friend events → network refresh */
+const FRIENDS_REFRESH_DEBOUNCE_MS = 8_000
+/** Re-check for social sidebar if not found yet */
+const ROOT_RETRY_MS = 5_000
 
 /** @type {Map<string, string>} puuid → tag */
 const tagByPuuid = new Map()
@@ -17,9 +24,17 @@ let myGameName = null
 let observer = null
 /** @type {ReturnType<typeof setInterval>|null} */
 let pollTimer = null
+/** @type {ReturnType<typeof setInterval>|null} */
+let rootRetryTimer = null
 /** @type {ReturnType<typeof setTimeout>|null} */
 let injectTimer = null
+/** @type {ReturnType<typeof setTimeout>|null} */
+let friendsRefreshTimer = null
+/** @type {Element|null} */
+let observedRoot = null
 let started = false
+let refreshInFlight = false
+let lastRefreshAt = 0
 
 function normalizeTag(tag) {
   if (!tag || typeof tag !== 'string') return ''
@@ -65,6 +80,7 @@ function findSocialRoot() {
     document.querySelector('.lol-social-sidebar') ||
     document.querySelector('.rcp-fe-viewport-sidebar .social-plugin-home') ||
     document.querySelector('.social-roster') ||
+    document.querySelector('.lol-social-lower') ||
     null
   )
 }
@@ -74,7 +90,6 @@ function ensureTagSpan(host, tag) {
   const next = normalizeTag(tag)
   let span = host.querySelector?.(`:scope > .${TAG_CLASS}`) || null
 
-  // Also check next sibling if host is a text-bearing name node
   if (!span && host.parentElement) {
     const sib = host.nextElementSibling
     if (sib?.classList?.contains(TAG_CLASS)) span = sib
@@ -89,7 +104,6 @@ function ensureTagSpan(host, tag) {
   if (!span) {
     span = document.createElement('span')
     span.className = TAG_CLASS
-    // Prefer appending inside host so layout stays with the name
     if (host.appendChild) host.appendChild(span)
     else host.parentElement?.insertBefore(span, host.nextSibling)
   }
@@ -99,46 +113,29 @@ function ensureTagSpan(host, tag) {
 }
 
 /**
- * Heuristic: find name label elements in social sidebar and match to friends/me.
- * Riot class names vary; we match by visible name text against LCU identities.
+ * Inject into social sidebar only — no full-document scans.
  */
 function injectIntoSocial() {
-  const root = findSocialRoot() || document.body
+  const root = findSocialRoot()
   if (!root) return
+
+  ensureObserverOn(root)
+
+  if (!tagByPuuid.size && !document.querySelector(`.${TAG_CLASS}`)) return
 
   const friendsByName = buildNameIndex()
 
-  // Own profile / header — elements that look like the current summoner name
-  const profileCandidates = root.querySelectorAll(
+  const nameEls = root.querySelectorAll(
     [
       '.lol-social-identity .player-name',
       '.lol-social-identity .name',
       '.social-identity .player-name',
-      '.riotbar-summoner-name',
-      '[class*="summoner-name"]',
-      '[class*="player-name"]',
-      '.lol-social-sidebar .my-summoner .name',
-    ].join(', '),
-  )
-
-  for (const el of profileCandidates) {
-    if (el.closest('#pengu-clubs-panel')) continue
-    if (el.classList?.contains(TAG_CLASS)) continue
-    const tag = myPuuid ? tagByPuuid.get(myPuuid) : ''
-    if (tag && nameMatchesElement(el, myGameName)) {
-      ensureTagSpan(el, tag)
-    }
-  }
-
-  // Friend / roster rows
-  const nameEls = root.querySelectorAll(
-    [
       '.friend-name',
-      '.lol-social-roster-group .name',
       '.roster-player-name',
-      '[class*="friend"] [class*="name"]',
       '.player-name',
       '.summoner-name',
+      '[class*="player-name"]',
+      '[class*="summoner-name"]',
     ].join(', '),
   )
 
@@ -146,51 +143,33 @@ function injectIntoSocial() {
     if (el.closest('#pengu-clubs-panel')) continue
     if (el.classList?.contains(TAG_CLASS)) continue
 
+    if (myPuuid && myGameName && nameMatchesElement(el, myGameName)) {
+      ensureTagSpan(el, tagByPuuid.get(myPuuid) || '')
+      continue
+    }
+
     const matched = matchElementToPuuid(el, friendsByName)
     if (!matched) continue
     ensureTagSpan(el, tagByPuuid.get(matched) || '')
-  }
-
-  // Fallback: walk elements whose text exactly equals a known gameName
-  if (tagByPuuid.size) {
-    const walk = root.querySelectorAll('span, div, p, a, label')
-    for (const el of walk) {
-      if (el.closest('#pengu-clubs-panel')) continue
-      if (el.classList?.contains(TAG_CLASS)) continue
-      if (el.querySelector(`.${TAG_CLASS}`)) continue
-      // Only leaf-ish nodes with short text
-      if (el.children.length > 1) continue
-      const text = (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3)
-        ? el.textContent?.trim()
-        : null
-      if (!text || text.length > 32) continue
-
-      const puuid = friendsByName.get(text.toLowerCase())
-      if (!puuid) continue
-      const tag = tagByPuuid.get(puuid)
-      if (!tag) continue
-      ensureTagSpan(el, tag)
-    }
   }
 }
 
 function nameMatchesElement(el, gameName) {
   if (!gameName || !el) return false
   const text = el.textContent?.replace(/\s+/g, ' ').trim() || ''
-  // Strip any already-injected tag text
   const tagSpan = el.querySelector?.(`.${TAG_CLASS}`)
   const nameOnly = tagSpan
     ? text.replace(tagSpan.textContent || '', '').trim()
     : text
-  return nameOnly.toLowerCase() === gameName.toLowerCase()
-    || nameOnly.toLowerCase().startsWith(gameName.toLowerCase())
+  const lower = nameOnly.toLowerCase()
+  const gn = gameName.toLowerCase()
+  return lower === gn || lower.startsWith(gn)
 }
 
 function matchElementToPuuid(el, friendsByName) {
   const tagSpan = el.querySelector?.(`.${TAG_CLASS}`)
   let text = el.textContent?.replace(/\s+/g, ' ').trim() || ''
   if (tagSpan) text = text.replace(tagSpan.textContent || '', '').trim()
-  // Riot sometimes shows gameName#tag
   const base = text.split('#')[0].trim()
   return friendsByName.get(text.toLowerCase())
     || friendsByName.get(base.toLowerCase())
@@ -204,7 +183,6 @@ function buildNameIndex() {
   if (myPuuid && myGameName) {
     map.set(myGameName.toLowerCase(), myPuuid)
   }
-  // Friends filled asynchronously into a module cache
   for (const [name, puuid] of friendNameToPuuid) {
     map.set(name, puuid)
   }
@@ -235,9 +213,12 @@ async function refreshFriendIndex() {
   }
 }
 
-export async function refreshTagCache() {
+export async function refreshTagCache({ force = false } = {}) {
   if (!isConfigured()) return
+  if (refreshInFlight) return
+  if (!force && Date.now() - lastRefreshAt < 5_000) return
 
+  refreshInFlight = true
   try {
     const me = await api.fetchIdentity()
     myPuuid = me.puuid
@@ -246,28 +227,24 @@ export async function refreshTagCache() {
     const friendPuuids = await refreshFriendIndex()
     const all = [...new Set([myPuuid, ...friendPuuids].filter(Boolean))]
 
-    const [mine, rows] = await Promise.all([
-      api.getMyMainClub().catch(() => null),
-      api.getMainClubTags(all).catch(() => []),
-    ])
+    // Single RPC covers self + friends (includes membership check server-side)
+    const rows = await api.getMainClubTags(all).catch(() => [])
 
     /** @type {Map<string, string>} */
     const next = new Map()
-    if (mine?.tag && myPuuid) next.set(myPuuid, normalizeTag(mine.tag))
-
     for (const row of rows ?? []) {
       if (row?.puuid && row?.tag) next.set(row.puuid, normalizeTag(row.tag))
     }
 
-    // Remove stale
-    for (const key of [...tagByPuuid.keys()]) {
-      if (!next.has(key)) tagByPuuid.delete(key)
-    }
+    tagByPuuid.clear()
     for (const [k, v] of next) tagByPuuid.set(k, v)
 
+    lastRefreshAt = Date.now()
     queueInject()
   } catch (err) {
     console.warn('[pengu-clubs] tag cache refresh failed:', err?.message || err)
+  } finally {
+    refreshInFlight = false
   }
 }
 
@@ -279,7 +256,26 @@ function queueInject() {
     } catch (err) {
       console.warn('[pengu-clubs] tag inject failed:', err?.message || err)
     }
-  }, 80)
+  }, INJECT_DEBOUNCE_MS)
+}
+
+function queueFriendsRefresh() {
+  clearTimeout(friendsRefreshTimer)
+  friendsRefreshTimer = setTimeout(() => {
+    refreshTagCache()
+  }, FRIENDS_REFRESH_DEBOUNCE_MS)
+}
+
+function ensureObserverOn(root) {
+  if (!observer || !root) return
+  if (observedRoot === root) return
+  try {
+    observer.disconnect()
+    observer.observe(root, { childList: true, subtree: true })
+    observedRoot = root
+  } catch (err) {
+    console.warn('[pengu-clubs] tag observer attach failed:', err?.message || err)
+  }
 }
 
 function bindObserver() {
@@ -292,29 +288,33 @@ function bindObserver() {
       const nodes = [...(m.addedNodes || []), ...(m.removedNodes || [])]
       if (!nodes.length) return true
 
-      // Skip only when every touched node is our injected tag span
       return !nodes.every((n) => {
         if (n.nodeType !== 1) return false
-        const el = /** @type {Element} */ (n)
-        return el.classList?.contains(TAG_CLASS)
+        return /** @type {Element} */ (n).classList?.contains(TAG_CLASS)
       })
     })
     if (relevant) queueInject()
   })
 
-  const attach = () => {
-    const root = document.body || document.documentElement
-    if (!root) {
-      requestAnimationFrame(attach)
-      return
+  const tryAttach = () => {
+    const root = findSocialRoot()
+    if (root) {
+      ensureObserverOn(root)
+      return true
     }
-    try {
-      observer.observe(root, { childList: true, subtree: true })
-    } catch (err) {
-      console.warn('[pengu-clubs] tag observer attach failed:', err?.message || err)
-    }
+    return false
   }
-  attach()
+
+  if (!tryAttach()) {
+    // Wait for social UI — do NOT observe document.body (too expensive)
+    rootRetryTimer = setInterval(() => {
+      if (tryAttach()) {
+        clearInterval(rootRetryTimer)
+        rootRetryTimer = null
+        queueInject()
+      }
+    }, ROOT_RETRY_MS)
+  }
 }
 
 /**
@@ -325,13 +325,13 @@ export function startClubTags(opts = {}) {
   started = true
 
   bindObserver()
-  refreshTagCache()
+  refreshTagCache({ force: true })
   pollTimer = setInterval(() => refreshTagCache(), POLL_MS)
 
   const socket = opts.socket
   if (socket?.observe) {
     socket.observe('/lol-chat/v1/friends', () => {
-      refreshTagCache()
+      queueFriendsRefresh()
     })
     socket.observe('/lol-chat/v1/me', () => {
       queueInject()
@@ -343,8 +343,13 @@ export function stopClubTags() {
   started = false
   observer?.disconnect()
   observer = null
+  observedRoot = null
   clearInterval(pollTimer)
   pollTimer = null
+  clearInterval(rootRetryTimer)
+  rootRetryTimer = null
   clearTimeout(injectTimer)
   injectTimer = null
+  clearTimeout(friendsRefreshTimer)
+  friendsRefreshTimer = null
 }
